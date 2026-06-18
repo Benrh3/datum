@@ -198,6 +198,9 @@ app.get('/ap-review', (req, res) => {
     }
     if (hasOverrun(buildingId, item.id, item.invoice_date))
       return { ...item, chip: { text: 'Over budget', cls: 'block' } };
+    const qLineSum = db.prepare('SELECT COALESCE(SUM(amount_cents),0) AS s FROM invoice_lines WHERE invoice_id = ?').get(item.id) as any;
+    if (qLineSum.s !== item.total_cents)
+      return { ...item, chip: { text: 'Lines mismatch', cls: 'block' } };
     const pending = db.prepare(
       "SELECT 1 FROM approvals WHERE invoice_id = ? AND status IN ('pending','queued')"
     ).get(item.id);
@@ -293,6 +296,18 @@ app.get('/ap-review', (req, res) => {
         + ' (' + overruns[0].over_pct + '%) over Q' + Math.ceil(invMonth / 3) + ' budget',
     pass: budgetOk,
     chip: budgetOk ? 'Within budget' : 'Adds approver',
+  });
+
+  // 6. Line reconciliation
+  const lineSum = lines.reduce((s: number, l: any) => s + l.amount_cents, 0);
+  const reconOk = lineSum === invoice.total_cents;
+  gates.push({
+    name: 'Line reconciliation',
+    sub: reconOk ? 'Line amounts sum to invoice total'
+      : 'Lines sum to $' + (lineSum / 100).toLocaleString('en-US', { maximumFractionDigits: 0 })
+        + ' but invoice total is $' + (invoice.total_cents / 100).toLocaleString('en-US', { maximumFractionDigits: 0 }),
+    pass: reconOk,
+    chip: reconOk ? 'Balanced' : 'Mismatch',
   });
 
   // Approval chain — generated from rules, merged with persisted decisions

@@ -41,17 +41,25 @@ export async function readInvoice(fileBuffer: Buffer, mediaType: string): Promis
     ? { type: 'document' as const, source: { type: 'base64' as const, media_type: mediaType as 'application/pdf', data } }
     : { type: 'image' as const, source: { type: 'base64' as const, media_type: mediaType as 'image/png', data } };
 
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 4096,
-    messages: [{
-      role: 'user',
-      content: [
-        contentBlock,
-        { type: 'text', text: PROMPT },
-      ],
-    }],
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 60_000);
+
+  let response;
+  try {
+    response = await client.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 4096,
+      messages: [{
+        role: 'user',
+        content: [
+          contentBlock,
+          { type: 'text', text: PROMPT },
+        ],
+      }],
+    }, { signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
 
   const text = response.content.find(b => b.type === 'text');
   if (!text || text.type !== 'text') throw new Error('No text in reader response');

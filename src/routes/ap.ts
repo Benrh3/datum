@@ -98,10 +98,17 @@ ap.post('/upload', upload.single('file'), async (req, res) => {
       insertLine.run(invoiceId, glAccountId, line.description, line.amount_cents, codingSource, confidence);
     }
 
+    // Reconciliation: flag if line amounts don't sum to total
+    const lineSum = extracted.lines.reduce((s, l) => s + l.amount_cents, 0);
+    const reconOk = lineSum === extracted.total_cents;
+    const reconNote = reconOk ? null
+      : 'Line amounts sum to $' + (lineSum / 100).toLocaleString('en-US', { maximumFractionDigits: 0 })
+        + ' but invoice total is $' + (extracted.total_cents / 100).toLocaleString('en-US', { maximumFractionDigits: 0 });
+
     // Update import record
     db.prepare(`
-      UPDATE invoice_imports SET status = 'needs_review', invoice_id = ?, extracted_json = ? WHERE id = ?
-    `).run(invoiceId, JSON.stringify(extracted), importId);
+      UPDATE invoice_imports SET status = 'needs_review', invoice_id = ?, extracted_json = ?, note = ? WHERE id = ?
+    `).run(invoiceId, JSON.stringify(extracted), reconNote, importId);
 
     // Generate approvals from rules
     const invoice = db.prepare('SELECT * FROM invoices WHERE id = ?').get(invoiceId) as any;
@@ -142,7 +149,11 @@ ap.post('/upload', upload.single('file'), async (req, res) => {
       }
     }
 
-    res.json({ ok: true, invoice_id: Number(invoiceId) });
+    const warnings: string[] = [];
+    if (!matchedVendor) warnings.push('Vendor "' + extracted.vendor + '" not matched — assigned to ' + (vendors[0]?.name ?? 'default'));
+    if (!reconOk) warnings.push(reconNote!);
+
+    res.json({ ok: true, invoice_id: Number(invoiceId), warnings });
   } catch (err: any) {
     console.error('[ap/upload]', err);
     res.status(500).json({ error: err.message || 'Upload failed' });
