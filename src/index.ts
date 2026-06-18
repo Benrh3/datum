@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { db, migrate } from './db.js';
 import { reports } from './routes/reports.js';
+import { ap } from './routes/ap.js';
 
 migrate();
 
@@ -308,8 +309,9 @@ app.get('/ap-review', (req, res) => {
   res.render('ap-review', { building, queue, selectedId, invoice, lines, gates, approvals, importInfo, rules });
 });
 
-// One router per domain. Add: ap, leasing, vendors, capital, investor.
+// One router per domain. Add: leasing, vendors, capital, investor.
 app.use('/api', reports);
+app.use('/api/ap', ap);
 
 const port = Number(process.env.PORT ?? 4010);
 app.listen(port, () => console.log(`[commercial-pm] http://localhost:${port}`));

@@ -178,9 +178,10 @@ function fmtDate(iso) {
         <div class="crumb"><b>Accounting</b> &nbsp;/&nbsp; Accounts payable</div>
         <h1>Review queue</h1>
       </div>
-      <button class="btn btn-primary" disabled>
+      <input type="file" id="upload-input" accept=".pdf,image/jpeg,image/png,image/webp" hidden>
+      <button class="btn btn-primary" id="upload-btn">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 16V4m0 0L8 8m4-4l4 4M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
-        Upload invoice
+        <span id="upload-label">Upload invoice</span>
       </button>
     </div>
 
@@ -311,5 +312,40 @@ function fmtDate(iso) {
     </div>
   </main>
 </div>
+<script>
+(function () {
+  var btn = document.getElementById('upload-btn');
+  var input = document.getElementById('upload-input');
+  var label = document.getElementById('upload-label');
+
+  btn.addEventListener('click', function () { input.click(); });
+
+  input.addEventListener('change', function () {
+    var file = this.files[0];
+    if (!file) return;
+
+    label.textContent = 'Reading…';
+    btn.disabled = true;
+
+    var form = new FormData();
+    form.append('file', file);
+
+    fetch('/api/ap/upload', { method: 'POST', body: form })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.ok && data.invoice_id) {
+          window.location.href = '/ap-review?invoice=' + data.invoice_id;
+        } else {
+          label.textContent = data.error || 'Upload failed';
+          btn.disabled = false;
+        }
+      })
+      .catch(function () {
+        label.textContent = 'Upload failed';
+        btn.disabled = false;
+      });
+  });
+})();
+</script>
 </body>
 </html>
