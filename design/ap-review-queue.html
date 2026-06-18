@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en" data-mode="advanced">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Accounts payable — Cordova Exchange</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --bg:#0C0D0F; --surface:#141619; --surface-2:#1A1D22; --hairline:#24272C;
+    --text:#E7E9EC; --text-dim:#969CA4; --text-faint:#5F646B;
+    --mint:#4FE3A1; --clay:#DB9A63;
+    --sans:"General Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,"SF Mono",monospace;
+    --r:10px; --r-sm:6px; --pad:28px;
+  }
+  *{box-sizing:border-box;} html,body{margin:0;}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;
+       line-height:1.5;-webkit-font-smoothing:antialiased;letter-spacing:.1px;}
+  .num{font-family:var(--mono);font-variant-numeric:tabular-nums;}
+
+  .app{display:grid;grid-template-columns:232px 1fr;min-height:100vh;}
+  .rail{border-right:1px solid var(--hairline);padding:22px 16px;display:flex;flex-direction:column;gap:26px;}
+  .brand{display:flex;align-items:center;gap:10px;padding:4px 8px;}
+  .brand .dot{width:9px;height:9px;border-radius:50%;background:var(--mint);animation:pulse 2.6s ease-out infinite;}
+  .brand b{font-weight:600;letter-spacing:.2px;} .brand span{color:var(--text-faint);font-size:12px;display:block;margin-top:1px;}
+  nav{display:flex;flex-direction:column;gap:2px;}
+  nav a{display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:var(--r-sm);
+        color:var(--text-dim);text-decoration:none;font-weight:500;border-left:2px solid transparent;}
+  nav a:hover{background:var(--surface);color:var(--text);}
+  nav a.active{color:var(--text);background:var(--surface);border-left-color:var(--mint);}
+  nav a svg{width:16px;height:16px;stroke-width:1.6;opacity:.9;}
+  .nav-label{font-size:11px;letter-spacing:1.4px;text-transform:uppercase;color:var(--text-faint);padding:0 12px;margin-bottom:4px;}
+
+  .main{min-width:0;display:flex;flex-direction:column;}
+  .topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;
+          padding:18px var(--pad);border-bottom:1px solid var(--hairline);}
+  .crumb{color:var(--text-faint);font-size:12.5px;} .crumb b{color:var(--text-dim);font-weight:500;}
+  .topbar h1{font-size:19px;font-weight:600;margin:2px 0 0;letter-spacing:.2px;}
+  .btn{display:inline-flex;align-items:center;gap:8px;font:inherit;font-weight:500;font-size:13px;
+       border-radius:var(--r-sm);padding:9px 14px;border:1px solid var(--hairline);
+       background:var(--surface);color:var(--text);cursor:pointer;}
+  .btn:hover{background:var(--surface-2);}
+  .btn-primary{background:var(--mint);border-color:var(--mint);color:#08130D;}
+  .btn-primary:hover{filter:brightness(1.06);background:var(--mint);}
+  .btn svg{width:15px;height:15px;stroke-width:1.8;}
+
+  .work{display:grid;grid-template-columns:360px 1fr;flex:1;min-height:0;}
+
+  /* queue */
+  .queue{border-right:1px solid var(--hairline);overflow-y:auto;}
+  .queue-head{display:flex;align-items:center;justify-content:space-between;
+              padding:16px var(--pad);color:var(--text-faint);font-size:11px;
+              letter-spacing:1.2px;text-transform:uppercase;}
+  .qitem{display:block;width:100%;text-align:left;background:none;border:none;font:inherit;cursor:pointer;
+         padding:14px var(--pad);border-bottom:1px solid var(--hairline);border-left:2px solid transparent;color:var(--text);}
+  .qitem:hover{background:var(--surface);}
+  .qitem.sel{background:var(--surface);border-left-color:var(--mint);}
+  .qitem .top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;}
+  .qitem .v{font-weight:500;}
+  .qitem .amt{font-family:var(--mono);font-variant-numeric:tabular-nums;}
+  .qitem .sub{display:flex;align-items:center;gap:8px;margin-top:6px;color:var(--text-faint);font-size:12px;}
+  .src{display:inline-flex;align-items:center;gap:5px;}
+  .src svg{width:12px;height:12px;stroke-width:1.7;}
+
+  .chip{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:500;
+        padding:3px 8px;border-radius:var(--r-sm);letter-spacing:.2px;}
+  .chip.ok{color:var(--mint);background:rgba(79,227,161,.10);}
+  .chip.block{color:var(--clay);background:rgba(219,154,99,.10);}
+  .chip.pend{color:var(--text-dim);background:var(--surface-2);}
+  .chip.num{font-family:var(--mono);}
+
+  /* detail */
+  .detail{overflow-y:auto;padding:24px var(--pad) 40px;}
+  .dhead{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;}
+  .dhead .v{font-size:18px;font-weight:600;}
+  .dhead .meta{color:var(--text-faint);font-size:12.5px;margin-top:4px;}
+  .dhead .read{display:inline-flex;align-items:center;gap:6px;color:var(--text-dim);font-size:12px;margin-top:6px;}
+  .dhead .read i{color:var(--mint);font-style:normal;font-family:var(--mono);}
+  .damt{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:26px;font-weight:500;letter-spacing:-.5px;}
+
+  .sect{margin-top:26px;}
+  .sect h3{font-size:11px;letter-spacing:1.2px;text-transform:uppercase;color:var(--text-faint);
+           font-weight:500;margin:0 0 12px;}
+
+  .gates{border:1px solid var(--hairline);border-radius:var(--r);background:var(--surface);overflow:hidden;}
+  .gate{display:flex;align-items:center;gap:12px;padding:13px 16px;border-bottom:1px solid var(--hairline);}
+  .gate:last-child{border-bottom:none;}
+  .gate .ic{width:18px;height:18px;flex:none;display:grid;place-items:center;border-radius:50%;}
+  .gate .ic svg{width:12px;height:12px;stroke-width:2.4;}
+  .gate.pass .ic{background:rgba(79,227,161,.14);color:var(--mint);}
+  .gate.warn .ic{background:rgba(219,154,99,.14);color:var(--clay);}
+  .gate .lbl{flex:1;} .gate .lbl b{font-weight:500;} .gate .lbl span{display:block;color:var(--text-faint);font-size:12px;margin-top:1px;}
+  .gate .st{font-size:12.5px;}
+
+  table{width:100%;border-collapse:collapse;}
+  .lines{border:1px solid var(--hairline);border-radius:var(--r);background:var(--surface);overflow:hidden;}
+  .lines th{text-align:right;font-weight:500;color:var(--text-faint);font-size:11px;letter-spacing:.6px;
+            text-transform:uppercase;padding:11px 14px;border-bottom:1px solid var(--hairline);}
+  .lines th.l{text-align:left;}
+  .lines td{padding:13px 14px;border-bottom:1px solid var(--hairline);text-align:right;}
+  .lines tr:last-child td{border-bottom:none;}
+  .lines td.l{text-align:left;}
+  .code{font-family:var(--mono);font-size:12.5px;color:var(--text-dim);}
+  .prov{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;margin-top:3px;color:var(--text-faint);}
+  .prov.suggest i{color:var(--mint);font-style:normal;font-family:var(--mono);}
+  .prov.lowconf{color:var(--clay);}
+  .needcode{color:var(--clay);font-size:12px;cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;}
+
+  /* approval chain */
+  .chain{position:relative;padding-left:6px;}
+  .step{display:flex;gap:14px;padding:0 0 18px 0;position:relative;}
+  .step:last-child{padding-bottom:0;}
+  .step .line{position:absolute;left:8px;top:18px;bottom:0;width:1px;background:var(--hairline);}
+  .step:last-child .line{display:none;}
+  .step .marker{width:17px;height:17px;border-radius:50%;flex:none;z-index:1;display:grid;place-items:center;}
+  .step.done .marker{background:var(--mint);color:#08130D;}
+  .step.done .marker svg{width:10px;height:10px;stroke-width:3;}
+  .step.now .marker{background:var(--bg);border:2px solid var(--mint);box-shadow:0 0 0 0 rgba(79,227,161,.5);animation:pulse 2.6s ease-out infinite;}
+  .step.queued .marker{background:var(--bg);border:2px solid var(--hairline);}
+  .step .who b{font-weight:500;} .step .who .role{color:var(--text-faint);font-size:12px;}
+  .step .who .t{color:var(--text-faint);font-size:12px;margin-top:2px;}
+  .step.queued .who b{color:var(--text-dim);}
+  .reason{color:var(--clay);}
+
+  .actions{display:flex;gap:10px;margin-top:26px;flex-wrap:wrap;}
+  .rulenote{color:var(--text-faint);font-size:12px;margin-top:12px;line-height:1.6;}
+
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(79,227,161,.45);}70%{box-shadow:0 0 0 7px rgba(79,227,161,0);}100%{box-shadow:0 0 0 0 rgba(79,227,161,0);}}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;}}
+  :focus-visible{outline:2px solid var(--mint);outline-offset:2px;border-radius:4px;}
+
+  @media (max-width:980px){
+    .app{grid-template-columns:1fr;}
+    .rail{flex-direction:row;align-items:center;overflow-x:auto;gap:14px;border-right:none;border-bottom:1px solid var(--hairline);padding:14px 16px;}
+    .rail nav{flex-direction:row;} .nav-label{display:none;} nav a span.t{display:none;}
+    .work{grid-template-columns:1fr;}
+    .queue{border-right:none;border-bottom:1px solid var(--hairline);max-height:280px;}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="rail">
+    <div class="brand"><div class="dot"></div><div><b>Cordova Exchange</b><span>Hastings Holdings LP</span></div></div>
+    <nav aria-label="Sections">
+      <div class="nav-label">Portfolio</div>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span class="t">Overview</span></a>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 21h18M5 21V7l7-4 7 4v14"/></svg><span class="t">Rent roll</span></a>
+      <div class="nav-label">Accounting</div>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 3v18h18M8 14l3-3 3 3 5-6"/></svg><span class="t">Budget vs actual</span></a>
+      <a href="#" class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 5h16v14H4zM4 9h16M9 13h6"/></svg><span class="t">Accounts payable</span></a>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3v18M5 8l7-5 7 5"/></svg><span class="t">Vendors</span></a>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <div>
+        <div class="crumb"><b>Accounting</b> &nbsp;/&nbsp; Accounts payable</div>
+        <h1>Review queue</h1>
+      </div>
+      <button class="btn btn-primary" id="upload">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 16V4m0 0L8 8m4-4l4 4M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
+        Upload invoice
+      </button>
+    </div>
+
+    <div class="work">
+      <!-- queue -->
+      <div class="queue" id="queue">
+        <div class="queue-head"><span>Awaiting action</span><span id="qcount">4</span></div>
+
+        <button class="qitem sel" data-id="roof">
+          <div class="top"><span class="v">Pinnacle Roofing</span><span class="amt">$22,800</span></div>
+          <div class="sub"><span class="src"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 16V4m0 0L8 8m4-4l4 4"/></svg>Uploaded</span> · <span class="chip block">Over budget</span></div>
+        </button>
+
+        <button class="qitem" data-id="hydro">
+          <div class="top"><span class="v">BC Hydro</span><span class="amt">$8,420</span></div>
+          <div class="sub"><span class="src"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 6h16v12H4zM4 7l8 6 8-6"/></svg>From inbox</span> · <span class="chip pend">In approval</span></div>
+        </button>
+
+        <button class="qitem" data-id="land">
+          <div class="top"><span class="v">GreenBlade Landscaping</span><span class="amt">$3,866</span></div>
+          <div class="sub"><span class="src"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 6h16v12H4zM4 7l8 6 8-6"/></svg>From inbox</span> · <span class="chip block">Work unconfirmed</span></div>
+        </button>
+
+        <button class="qitem" data-id="jan">
+          <div class="top"><span class="v">Westcoast Janitorial</span><span class="amt">$4,750</span></div>
+          <div class="sub"><span class="src"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 6h16v12H4zM4 7l8 6 8-6"/></svg>From inbox</span> · <span class="chip block">Insurance lapsed</span></div>
+        </button>
+      </div>
+
+      <!-- detail: Pinnacle Roofing -->
+      <div class="detail" id="detail">
+        <div class="dhead">
+          <div>
+            <div class="v">Pinnacle Roofing Ltd</div>
+            <div class="meta">Invoice PR-4471 &middot; received Jun 18, 2026</div>
+            <div class="read"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3v18h18M8 14l3-3 3 3 5-6"/></svg>Read automatically &middot; <i>96%</i> confidence</div>
+          </div>
+          <div class="damt">$22,800.00</div>
+        </div>
+
+        <!-- the controls that beat Yardi -->
+        <div class="sect">
+          <h3>Pre-payment checks</h3>
+          <div class="gates">
+            <div class="gate pass">
+              <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 13l4 4L19 7"/></svg></span>
+              <span class="lbl"><b>Vendor approved</b><span>Banking and W-9 on file &middot; onboarded Mar 2025</span></span>
+              <span class="st chip ok">Clear</span>
+            </div>
+            <div class="gate pass">
+              <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 13l4 4L19 7"/></svg></span>
+              <span class="lbl"><b>Insurance certificate</b><span>$5M liability &middot; valid to Aug 31, 2026</span></span>
+              <span class="st chip ok">Valid</span>
+            </div>
+            <div class="gate pass">
+              <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 13l4 4L19 7"/></svg></span>
+              <span class="lbl"><b>Work confirmed on site</b><span>Photos and sign-off by J. Tran, Building Manager &middot; Jun 16</span></span>
+              <span class="st chip ok">Verified</span>
+            </div>
+            <div class="gate pass">
+              <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 13l4 4L19 7"/></svg></span>
+              <span class="lbl"><b>Duplicate check</b><span>No prior invoice from this vendor matches PR-4471</span></span>
+              <span class="st chip ok">None found</span>
+            </div>
+            <div class="gate warn">
+              <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 9v4m0 4h.01M10.3 3.9L2 18a2 2 0 001.7 3h16.6a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/></svg></span>
+              <span class="lbl"><b>Budget check</b><span>Posts Repairs &amp; maintenance $4,800 (26.7%) over Q2 budget</span></span>
+              <span class="st chip block">Adds approver</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- extracted + coded lines -->
+        <div class="sect">
+          <h3>Lines &amp; coding</h3>
+          <div class="lines">
+            <table>
+              <thead><tr><th class="l">Description</th><th>G/L code</th><th>Amount</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td class="l">Tear-off and replace section B membrane
+                      <div class="prov suggest">Vendor default &middot; <i>5100</i></div></td>
+                  <td class="code">5100 · R&amp;M</td>
+                  <td class="num">$19,500</td>
+                </tr>
+                <tr>
+                  <td class="l">Disposal &amp; haul-away
+                      <div class="prov suggest">Suggested &middot; <i>97%</i></div></td>
+                  <td class="code">5100 · R&amp;M</td>
+                  <td class="num">$2,100</td>
+                </tr>
+                <tr>
+                  <td class="l">Emergency call-out fee
+                      <div class="prov lowconf">Suggested &middot; 61% — <span class="needcode">confirm code</span></div></td>
+                  <td class="code" style="color:var(--clay)">5100 ?</td>
+                  <td class="num">$1,200</td>
+                </tr>
+              </tbody>
+              <tfoot><tr><td class="l" style="border-top:1px solid var(--hairline);font-weight:600;padding:13px 14px">Total</td><td style="border-top:1px solid var(--hairline)"></td><td class="num" style="border-top:1px solid var(--hairline);font-weight:600;padding:13px 14px;text-align:right">$22,800</td></tr></tfoot>
+            </table>
+          </div>
+        </div>
+
+        <!-- approval routing, scaled to size + scope -->
+        <div class="sect">
+          <h3>Approval routing</h3>
+          <div class="chain">
+            <div class="step done">
+              <span class="line"></span>
+              <span class="marker"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 13l4 4L19 7"/></svg></span>
+              <div class="who"><b>J. Tran</b> <span class="role">· Building Manager</span><div class="t">Approved Jun 16 — confirmed work complete</div></div>
+            </div>
+            <div class="step done">
+              <span class="line"></span>
+              <span class="marker"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 13l4 4L19 7"/></svg></span>
+              <div class="who"><b>S. Okafor</b> <span class="role">· Property Manager</span><div class="t">Approved Jun 17</div></div>
+            </div>
+            <div class="step now">
+              <span class="line"></span>
+              <span class="marker"></span>
+              <div class="who"><b>M. Reyes</b> <span class="role">· Controller</span><div class="t">Pending — required over $10,000 · waiting 1 day</div></div>
+            </div>
+            <div class="step queued">
+              <span class="marker"></span>
+              <div class="who"><b>D. Cho</b> <span class="role">· VP Finance</span><div class="t reason">Queued — added because the invoice exceeds budget</div></div>
+            </div>
+          </div>
+          <p class="rulenote">Routing rule: invoices over $10,000 require the Controller; a budget overrun adds VP Finance. The person who codes an invoice can't be its sole approver.</p>
+        </div>
+
+        <div class="actions">
+          <button class="btn btn-primary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 13l4 4L19 7"/></svg>Approve &amp; advance</button>
+          <button class="btn">Request changes</button>
+          <button class="btn">Reject</button>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+  // Select between queue items (only the roof item has full detail wired for the mock).
+  var q = document.getElementById('queue');
+  q.addEventListener('click', function(e){
+    var item = e.target.closest('.qitem'); if(!item) return;
+    q.querySelectorAll('.qitem').forEach(function(i){ i.classList.remove('sel'); });
+    item.classList.add('sel');
+  });
+
+  // Demo the headline moment: "Upload invoice" -> a row appears Reading… then flips
+  // to Needs review, mimicking the read+auto-code pipeline (no backend here).
+  document.getElementById('upload').addEventListener('click', function(){
+    var row = document.createElement('button');
+    row.className = 'qitem';
+    row.innerHTML = '<div class="top"><span class="v">Reading document…</span><span class="amt">—</span></div>'
+      + '<div class="sub"><span class="src">Uploaded</span> · <span class="chip pend">Extracting</span></div>';
+    q.insertBefore(row, q.children[1]);
+    var n = document.getElementById('qcount'); n.textContent = String(parseInt(n.textContent,10)+1);
+    setTimeout(function(){
+      row.querySelector('.v').textContent = 'Apex Mechanical';
+      row.querySelector('.amt').textContent = '$2,940';
+      row.querySelector('.sub').innerHTML = '<span class="src">Uploaded</span> · <span class="chip ok">Coded · needs review</span>';
+    }, 1400);
+  });
+</script>
+</body>
+</html>
