@@ -1,0 +1,307 @@
+<%
+function fmt(cents) {
+  return '$' + (Math.abs(cents) / 100).toLocaleString('en-US', { maximumFractionDigits: 0 });
+}
+function fmtFull(cents) {
+  return '$' + (cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function fmtDate(iso) {
+  var p = iso.split('T')[0].split('-');
+  var m = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return m[+p[1] - 1] + ' ' + +p[2] + ', ' + p[0];
+}
+%>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Accounts payable — <%= building.name %></title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --bg:#0C0D0F; --surface:#141619; --surface-2:#1A1D22; --hairline:#24272C;
+    --text:#E7E9EC; --text-dim:#969CA4; --text-faint:#5F646B;
+    --mint:#4FE3A1; --clay:#DB9A63;
+    --sans:"General Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,"SF Mono",monospace;
+    --r:10px; --r-sm:6px; --pad:28px;
+  }
+  *{box-sizing:border-box;} html,body{margin:0;}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;
+       line-height:1.5;-webkit-font-smoothing:antialiased;letter-spacing:.1px;}
+  .num{font-family:var(--mono);font-variant-numeric:tabular-nums;}
+
+  .app{display:grid;grid-template-columns:232px 1fr;min-height:100vh;}
+  .rail{border-right:1px solid var(--hairline);padding:22px 16px;display:flex;flex-direction:column;gap:26px;}
+  .brand{display:flex;align-items:center;gap:10px;padding:4px 8px;}
+  .brand .dot{width:9px;height:9px;border-radius:50%;background:var(--mint);animation:pulse 2.6s ease-out infinite;}
+  .brand b{font-weight:600;letter-spacing:.2px;} .brand span{color:var(--text-faint);font-size:12px;display:block;margin-top:1px;}
+  nav{display:flex;flex-direction:column;gap:2px;}
+  nav a{display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:var(--r-sm);
+        color:var(--text-dim);text-decoration:none;font-weight:500;border-left:2px solid transparent;}
+  nav a:hover{background:var(--surface);color:var(--text);}
+  nav a.active{color:var(--text);background:var(--surface);border-left-color:var(--mint);}
+  nav a svg{width:16px;height:16px;stroke-width:1.6;opacity:.9;}
+  .nav-label{font-size:11px;letter-spacing:1.4px;text-transform:uppercase;color:var(--text-faint);padding:0 12px;margin-bottom:4px;}
+
+  .main{min-width:0;display:flex;flex-direction:column;}
+  .topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;
+          padding:18px var(--pad);border-bottom:1px solid var(--hairline);}
+  .crumb{color:var(--text-faint);font-size:12.5px;} .crumb b{color:var(--text-dim);font-weight:500;}
+  .topbar h1{font-size:19px;font-weight:600;margin:2px 0 0;letter-spacing:.2px;}
+  .btn{display:inline-flex;align-items:center;gap:8px;font:inherit;font-weight:500;font-size:13px;
+       border-radius:var(--r-sm);padding:9px 14px;border:1px solid var(--hairline);
+       background:var(--surface);color:var(--text);cursor:pointer;text-decoration:none;}
+  .btn:hover{background:var(--surface-2);}
+  .btn-primary{background:var(--mint);border-color:var(--mint);color:#08130D;}
+  .btn-primary:hover{filter:brightness(1.06);background:var(--mint);}
+  .btn svg{width:15px;height:15px;stroke-width:1.8;}
+
+  .work{display:grid;grid-template-columns:360px 1fr;flex:1;min-height:0;}
+
+  /* queue */
+  .queue{border-right:1px solid var(--hairline);overflow-y:auto;}
+  .queue-head{display:flex;align-items:center;justify-content:space-between;
+              padding:16px var(--pad);color:var(--text-faint);font-size:11px;
+              letter-spacing:1.2px;text-transform:uppercase;}
+  .qitem{display:block;width:100%;text-align:left;background:none;border:none;font:inherit;cursor:pointer;
+         padding:14px var(--pad);border-bottom:1px solid var(--hairline);border-left:2px solid transparent;
+         color:var(--text);text-decoration:none;}
+  .qitem:hover{background:var(--surface);}
+  .qitem.sel{background:var(--surface);border-left-color:var(--mint);}
+  .qitem .top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;}
+  .qitem .v{font-weight:500;}
+  .qitem .amt{font-family:var(--mono);font-variant-numeric:tabular-nums;}
+  .qitem .sub{display:flex;align-items:center;gap:8px;margin-top:6px;color:var(--text-faint);font-size:12px;}
+  .src{display:inline-flex;align-items:center;gap:5px;}
+  .src svg{width:12px;height:12px;stroke-width:1.7;}
+
+  .chip{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:500;
+        padding:3px 8px;border-radius:var(--r-sm);letter-spacing:.2px;}
+  .chip.ok{color:var(--mint);background:rgba(79,227,161,.10);}
+  .chip.block{color:var(--clay);background:rgba(219,154,99,.10);}
+  .chip.pend{color:var(--text-dim);background:var(--surface-2);}
+
+  /* detail */
+  .detail{overflow-y:auto;padding:24px var(--pad) 40px;}
+  .dhead{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;}
+  .dhead .v{font-size:18px;font-weight:600;}
+  .dhead .meta{color:var(--text-faint);font-size:12.5px;margin-top:4px;}
+  .dhead .read{display:inline-flex;align-items:center;gap:6px;color:var(--text-dim);font-size:12px;margin-top:6px;}
+  .dhead .read i{color:var(--mint);font-style:normal;font-family:var(--mono);}
+  .damt{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:26px;font-weight:500;letter-spacing:-.5px;}
+
+  .sect{margin-top:26px;}
+  .sect h3{font-size:11px;letter-spacing:1.2px;text-transform:uppercase;color:var(--text-faint);
+           font-weight:500;margin:0 0 12px;}
+
+  .gates{border:1px solid var(--hairline);border-radius:var(--r);background:var(--surface);overflow:hidden;}
+  .gate{display:flex;align-items:center;gap:12px;padding:13px 16px;border-bottom:1px solid var(--hairline);}
+  .gate:last-child{border-bottom:none;}
+  .gate .ic{width:18px;height:18px;flex:none;display:grid;place-items:center;border-radius:50%;}
+  .gate .ic svg{width:12px;height:12px;stroke-width:2.4;}
+  .gate.pass .ic{background:rgba(79,227,161,.14);color:var(--mint);}
+  .gate.warn .ic{background:rgba(219,154,99,.14);color:var(--clay);}
+  .gate .lbl{flex:1;} .gate .lbl b{font-weight:500;} .gate .lbl span{display:block;color:var(--text-faint);font-size:12px;margin-top:1px;}
+  .gate .st{font-size:12.5px;}
+
+  table{width:100%;border-collapse:collapse;}
+  .lines{border:1px solid var(--hairline);border-radius:var(--r);background:var(--surface);overflow:hidden;}
+  .lines th{text-align:right;font-weight:500;color:var(--text-faint);font-size:11px;letter-spacing:.6px;
+            text-transform:uppercase;padding:11px 14px;border-bottom:1px solid var(--hairline);}
+  .lines th.l{text-align:left;}
+  .lines td{padding:13px 14px;border-bottom:1px solid var(--hairline);text-align:right;}
+  .lines tr:last-child td{border-bottom:none;}
+  .lines td.l{text-align:left;}
+  .code{font-family:var(--mono);font-size:12.5px;color:var(--text-dim);}
+  .prov{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;margin-top:3px;color:var(--text-faint);}
+  .prov.suggest i{color:var(--mint);font-style:normal;font-family:var(--mono);}
+  .prov.lowconf{color:var(--clay);}
+  .needcode{color:var(--clay);font-size:12px;cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;}
+
+  /* approval chain */
+  .chain{position:relative;padding-left:6px;}
+  .step{display:flex;gap:14px;padding:0 0 18px 0;position:relative;}
+  .step:last-child{padding-bottom:0;}
+  .step .line{position:absolute;left:8px;top:18px;bottom:0;width:1px;background:var(--hairline);}
+  .step:last-child .line{display:none;}
+  .step .marker{width:17px;height:17px;border-radius:50%;flex:none;z-index:1;display:grid;place-items:center;}
+  .step.done .marker{background:var(--mint);color:#08130D;}
+  .step.done .marker svg{width:10px;height:10px;stroke-width:3;}
+  .step.now .marker{background:var(--bg);border:2px solid var(--mint);box-shadow:0 0 0 0 rgba(79,227,161,.5);animation:pulse 2.6s ease-out infinite;}
+  .step.queued .marker{background:var(--bg);border:2px solid var(--hairline);}
+  .step .who b{font-weight:500;} .step .who .role{color:var(--text-faint);font-size:12px;}
+  .step .who .t{color:var(--text-faint);font-size:12px;margin-top:2px;}
+  .step.queued .who b{color:var(--text-dim);}
+  .reason{color:var(--clay);}
+
+  .actions{display:flex;gap:10px;margin-top:26px;flex-wrap:wrap;}
+  .rulenote{color:var(--text-faint);font-size:12px;margin-top:12px;line-height:1.6;}
+
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(79,227,161,.45);}70%{box-shadow:0 0 0 7px rgba(79,227,161,0);}100%{box-shadow:0 0 0 0 rgba(79,227,161,0);}}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;}}
+  :focus-visible{outline:2px solid var(--mint);outline-offset:2px;border-radius:4px;}
+
+  @media (max-width:980px){
+    .app{grid-template-columns:1fr;}
+    .rail{flex-direction:row;align-items:center;overflow-x:auto;gap:14px;border-right:none;border-bottom:1px solid var(--hairline);padding:14px 16px;}
+    .rail nav{flex-direction:row;} .nav-label{display:none;} nav a span.t{display:none;}
+    .work{grid-template-columns:1fr;}
+    .queue{border-right:none;border-bottom:1px solid var(--hairline);max-height:280px;}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="rail">
+    <div class="brand"><div class="dot" aria-hidden="true"></div><div><b><%= building.name %></b><span><%= building.entity_name %></span></div></div>
+    <nav aria-label="Sections">
+      <div class="nav-label">Portfolio</div>
+      <a href="/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span class="t">Overview</span></a>
+      <a href="/rent-roll"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 9h2m-2 4h2m4-4h2m-2 4h2"/></svg><span class="t">Rent roll</span></a>
+      <div class="nav-label">Accounting</div>
+      <a href="/budget-vs-actual"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 3v18h18M8 14l3-3 3 3 5-6"/></svg><span class="t">Budget vs actual</span></a>
+      <a href="/ap-review" class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 5h16v14H4zM4 9h16M9 13h6"/></svg><span class="t">Accounts payable</span></a>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3v18M5 8l7-5 7 5M5 8v8l7 5 7-5V8"/></svg><span class="t">Recoveries</span></a>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <div>
+        <div class="crumb"><b>Accounting</b> &nbsp;/&nbsp; Accounts payable</div>
+        <h1>Review queue</h1>
+      </div>
+      <button class="btn btn-primary" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 16V4m0 0L8 8m4-4l4 4M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
+        Upload invoice
+      </button>
+    </div>
+
+    <div class="work">
+      <!-- queue -->
+      <div class="queue">
+        <div class="queue-head"><span>Awaiting action</span><span><%= queue.length %></span></div>
+<% for (const q of queue) { %>
+        <a href="/ap-review?invoice=<%= q.id %>" class="qitem<%= q.id === selectedId ? ' sel' : '' %>">
+          <div class="top"><span class="v"><%= q.vendor_name %></span><span class="amt"><%= fmt(q.total_cents) %></span></div>
+          <div class="sub">
+            <span class="src"><% if (q.source === 'upload') { %><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 16V4m0 0L8 8m4-4l4 4"/></svg>Uploaded<% } else if (q.source === 'email') { %><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 6h16v12H4zM4 7l8 6 8-6"/></svg>From inbox<% } else { %>Manual<% } %></span>
+            &middot; <span class="chip <%= q.chip.cls %>"><%= q.chip.text %></span>
+          </div>
+        </a>
+<% } %>
+      </div>
+
+      <!-- detail -->
+      <div class="detail">
+<% if (invoice) { %>
+        <div class="dhead">
+          <div>
+            <div class="v"><%= invoice.vendor_name %></div>
+            <div class="meta">Invoice <%= invoice.invoice_number %> &middot; dated <%= fmtDate(invoice.invoice_date) %></div>
+<% if (importInfo && importInfo.confidence) { %>
+            <div class="read"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3v18h18M8 14l3-3 3 3 5-6"/></svg>Read automatically &middot; <i><%= importInfo.confidence %>%</i> confidence</div>
+<% } %>
+          </div>
+          <div class="damt"><%= fmtFull(invoice.total_cents) %></div>
+        </div>
+
+        <!-- pre-payment checks -->
+        <div class="sect">
+          <h3>Pre-payment checks</h3>
+          <div class="gates">
+<% for (const g of gates) { %>
+            <div class="gate <%= g.pass ? 'pass' : 'warn' %>">
+              <span class="ic"><% if (g.pass) { %><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 13l4 4L19 7"/></svg><% } else { %><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 9v4m0 4h.01M10.3 3.9L2 18a2 2 0 001.7 3h16.6a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/></svg><% } %></span>
+              <span class="lbl"><b><%= g.name %></b><span><%= g.sub %></span></span>
+              <span class="st chip <%= g.pass ? 'ok' : 'block' %>"><%= g.chip %></span>
+            </div>
+<% } %>
+          </div>
+        </div>
+
+        <!-- lines & coding -->
+        <div class="sect">
+          <h3>Lines &amp; coding</h3>
+          <div class="lines">
+            <table>
+              <thead><tr><th class="l">Description</th><th>G/L code</th><th>Amount</th></tr></thead>
+              <tbody>
+<% for (const l of lines) {
+     const isLow = l.coding_source === 'ai_suggested' && l.confidence != null && l.confidence < 80;
+%>
+                <tr>
+                  <td class="l"><%= l.description %>
+<% if (l.coding_source === 'vendor_default') { %>
+                      <div class="prov suggest">Vendor default &middot; <i><%= l.gl_code %></i></div>
+<% } else if (l.coding_source === 'ai_suggested' && !isLow) { %>
+                      <div class="prov suggest">Suggested &middot; <i><%= l.confidence %>%</i></div>
+<% } else if (isLow) { %>
+                      <div class="prov lowconf">Suggested &middot; <%= l.confidence %>% — <span class="needcode">confirm code</span></div>
+<% } %>
+                  </td>
+                  <td class="code"<% if (isLow) { %> style="color:var(--clay)"<% } %>><%= l.gl_code %><% if (isLow) { %> ?<% } else { %> &middot; <%- l.gl_name.replace(/&/g, '&amp;').replace(/</g, '&lt;').length > 20 ? l.gl_name.substring(0,18).replace(/&/g, '&amp;') + '…' : l.gl_name.replace(/&/g, '&amp;') %><% } %></td>
+                  <td class="num"><%= fmt(l.amount_cents) %></td>
+                </tr>
+<% } %>
+              </tbody>
+              <tfoot><tr><td class="l" style="border-top:1px solid var(--hairline);font-weight:600;padding:13px 14px">Total</td><td style="border-top:1px solid var(--hairline)"></td><td class="num" style="border-top:1px solid var(--hairline);font-weight:600;padding:13px 14px;text-align:right"><%= fmt(invoice.total_cents) %></td></tr></tfoot>
+            </table>
+          </div>
+        </div>
+
+        <!-- approval routing -->
+<% if (approvals.length > 0) { %>
+        <div class="sect">
+          <h3>Approval routing</h3>
+          <div class="chain">
+<% for (const a of approvals) {
+     const cls = a.status === 'approved' ? 'done' : a.status === 'pending' ? 'now' : 'queued';
+%>
+            <div class="step <%= cls %>">
+<% if (a !== approvals[approvals.length - 1]) { %>
+              <span class="line"></span>
+<% } %>
+              <span class="marker"><% if (a.status === 'approved') { %><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 13l4 4L19 7"/></svg><% } %></span>
+              <div class="who">
+                <b><%= a.user_name %></b> <span class="role">&middot; <%= a.user_role %></span>
+                <div class="t<%= a.status === 'queued' && a.reason ? ' reason' : '' %>">
+<% if (a.status === 'approved') { %>
+                  Approved <%= fmtDate(a.decided_at) %><% if (a.reason) { %> — <%= a.reason %><% } %>
+<% } else if (a.status === 'pending') { %>
+                  Pending<% if (a.reason) { %> — <%= a.reason %><% } %>
+<% } else if (a.status === 'rejected') { %>
+                  Rejected<% if (a.reason) { %> — <%= a.reason %><% } %>
+<% } else { %>
+                  Queued<% if (a.reason) { %> — <%= a.reason %><% } %>
+<% } %>
+                </div>
+              </div>
+            </div>
+<% } %>
+          </div>
+          <p class="rulenote">Routing rule: invoices over $10,000 require the Controller; a budget overrun adds VP Finance. The person who codes an invoice can't be its sole approver.</p>
+        </div>
+<% } %>
+
+        <div class="actions">
+          <button class="btn btn-primary" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 13l4 4L19 7"/></svg>Approve &amp; advance</button>
+          <button class="btn" disabled>Request changes</button>
+          <button class="btn" disabled>Reject</button>
+        </div>
+<% } else { %>
+        <div style="display:grid;place-items:center;height:100%;color:var(--text-faint)">Select an invoice from the queue</div>
+<% } %>
+      </div>
+    </div>
+  </main>
+</div>
+</body>
+</html>
