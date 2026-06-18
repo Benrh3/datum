@@ -4,7 +4,9 @@ INSERT INTO entities (id,name,legal_form) VALUES (1,'Hastings Holdings LP','LP')
 INSERT INTO buildings (id,entity_id,name,address,city,rentable_area_sqft)
   VALUES (1,1,'Cordova Exchange','525 W Cordova St','Vancouver',100000);
 INSERT INTO suites (building_id,suite_number,floor,rentable_area_sqft,status) VALUES
-  (1,'200',2,12000,'occupied'),(1,'300',3,18000,'occupied'),(1,'400',4,9000,'vacant');
+  (1,'200',2,12000,'occupied'),(1,'300',3,18000,'occupied'),(1,'400',4,9000,'vacant'),
+  (1,'500',5,15500,'occupied'),(1,'510',5,6200,'vacant'),
+  (1,'600',6,14000,'occupied'),(1,'700',7,11800,'occupied'),(1,'800',8,13500,'occupied');
 
 INSERT INTO gl_accounts (id,code,name,account_type,is_recoverable,is_postable,sort_order) VALUES
   (10,'5000','Repairs & operations','operating_expense',1,0,10),
@@ -76,13 +78,26 @@ INSERT INTO invoice_imports (source,source_ref,received_at,matched_vendor_id,con
 -- Tenants & leases for rent roll
 INSERT INTO tenants (id,name,is_company,contact_name,contact_email) VALUES
   (1,'Blackwood & Associates LLP',1,'Sarah Blackwood','s.blackwood@blackwoodlaw.ca'),
-  (2,'Cascade Digital Inc',1,'James Chen','j.chen@cascadedigital.ca');
+  (2,'Cascade Digital Inc',1,'James Chen','j.chen@cascadedigital.ca'),
+  (3,'Pacific Rim Consulting Group',1,'Anita Sharma','a.sharma@pacificrimcg.ca'),
+  (4,'Northshore Wealth Management',1,'David Park','d.park@northshorewealth.ca'),
+  (5,'Tidewater Architecture + Design',1,'Emma Liu','e.liu@tidewaterarch.ca'),
+  (6,'Apex Ventures Corp',1,'Marcus Webb','m.webb@apexventures.ca');
 INSERT INTO leases (id,suite_id,tenant_id,commencement_date,expiry_date,lease_type,base_rent_annual_cents) VALUES
   (1,1,1,'2024-01-01','2029-12-31','nnn',36000000),
-  (2,2,2,'2025-03-01','2030-02-28','modified_gross',48600000);
+  (2,2,2,'2025-03-01','2030-02-28','modified_gross',48600000),
+  (3,4,3,'2023-07-01','2028-06-30','nnn',49600000),
+  (4,6,4,'2024-09-01','2029-08-31','modified_gross',49000000),
+  (5,7,5,'2025-01-01','2029-12-31','nnn',33040000),
+  (6,8,6,'2022-04-01','2027-03-31','modified_gross',51300000);
 INSERT INTO rent_steps (lease_id,effective_date,annual_rent_cents) VALUES
   (1,'2024-01-01',36000000),(1,'2025-01-01',37440000),(1,'2026-01-01',38937600),
-  (2,'2025-03-01',48600000),(2,'2026-03-01',50058000);
+  (2,'2025-03-01',48600000),(2,'2026-03-01',50058000),
+  (3,'2023-07-01',49600000),(3,'2024-07-01',51088000),(3,'2025-07-01',52621000),
+  (4,'2024-09-01',49000000),(4,'2025-09-01',50470000),
+  (5,'2025-01-01',33040000),(5,'2026-01-01',34031000),
+  (6,'2022-04-01',51300000),(6,'2023-04-01',52839000),(6,'2024-04-01',54424000),
+  (6,'2025-04-01',56057000),(6,'2026-04-01',57739000);
 
 -- Roles (ranked: lower rank = earlier in chain)
 INSERT INTO roles (id,key,name,rank) VALUES
