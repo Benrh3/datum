@@ -78,6 +78,92 @@ const MO = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','D
 function fmtD(iso: string) { const [y,m,d] = iso.split('T')[0].split('-').map(Number); return MO[m-1]+' '+d+', '+y; }
 function fmtMY(iso: string) { const [y,m] = iso.split('T')[0].split('-').map(Number); return MO[m-1]+' '+y; }
 
+function hasOverrun(buildingId: number, invoiceId: number, invoiceDate: string) {
+  const m = parseInt(invoiceDate.split('-')[1], 10);
+  const y = parseInt(invoiceDate.split('-')[0], 10);
+  return db.prepare(`
+    SELECT 1 FROM invoice_lines il
+    JOIN v_budget_vs_actual v ON v.gl_account_id = il.gl_account_id
+      AND v.building_id = ? AND v.fiscal_year = ? AND v.period = ?
+    WHERE il.invoice_id = ? AND v.actual_cents > v.budget_cents LIMIT 1
+  `).get(buildingId, y, m, invoiceId);
+}
+
+function hasServiceContract(vendorId: number, buildingId: number, today: string) {
+  return db.prepare(
+    `SELECT 1 FROM service_contracts
+     WHERE vendor_id = ? AND building_id = ? AND active = 1
+       AND start_date <= ? AND (end_date IS NULL OR end_date >= ?) LIMIT 1`
+  ).get(vendorId, buildingId, today, today);
+}
+
+function buildChainFromRules(invoiceId: number, totalCents: number, buildingId: number, invoiceDate: string) {
+  const hasBudgetOverrun = !!hasOverrun(buildingId, invoiceId, invoiceDate);
+  const rules = db.prepare(`
+    SELECT ar.*, r.key AS role_key, r.name AS role_name, r.rank AS role_rank
+    FROM approval_rules ar
+    JOIN roles r ON r.id = ar.required_role_id
+    WHERE ar.active = 1
+      AND (ar.scope = 'all' OR (ar.scope = 'building' AND ar.building_id = ?))
+    ORDER BY r.rank
+  `).all(buildingId) as any[];
+
+  const requiredRoles = new Map<number, any>();
+  for (const rule of rules) {
+    if (rule.trigger_type === 'always') {
+      requiredRoles.set(rule.required_role_id, rule);
+    } else if (rule.trigger_type === 'amount' && rule.min_amount_cents != null && totalCents >= rule.min_amount_cents) {
+      requiredRoles.set(rule.required_role_id, rule);
+    } else if (rule.trigger_type === 'budget_overrun' && hasBudgetOverrun) {
+      requiredRoles.set(rule.required_role_id, rule);
+    }
+  }
+
+  const sorted = [...requiredRoles.values()].sort((a, b) => a.role_rank - b.role_rank);
+
+  const existingApprovals = db.prepare(
+    'SELECT * FROM approvals WHERE invoice_id = ?'
+  ).all(invoiceId) as any[];
+  const approvalByUser = new Map(existingApprovals.map((a: any) => [a.user_id, a]));
+
+  const chain: any[] = [];
+  let foundPending = false;
+  for (let i = 0; i < sorted.length; i++) {
+    const rule = sorted[i];
+    const user = db.prepare('SELECT * FROM users WHERE role_id = ? LIMIT 1').get(rule.required_role_id) as any;
+    if (!user) continue;
+    const existing = approvalByUser.get(user.id);
+
+    let status: string, reason: string | null, decided_at: string | null;
+    if (existing) {
+      status = existing.status;
+      reason = existing.reason;
+      decided_at = existing.decided_at;
+    } else {
+      status = foundPending ? 'queued' : 'pending';
+      reason = rule.trigger_type === 'amount'
+        ? 'required over $' + (rule.min_amount_cents / 100).toLocaleString('en-US', { maximumFractionDigits: 0 })
+        : rule.trigger_type === 'budget_overrun'
+          ? 'added because the invoice exceeds budget'
+          : null;
+      decided_at = null;
+    }
+
+    if (status === 'pending' || status === 'queued') foundPending = true;
+
+    chain.push({
+      user_name: user.name,
+      user_role: rule.role_name,
+      status,
+      reason,
+      decided_at,
+      rule_trigger: rule.trigger_type,
+      rule_min: rule.min_amount_cents,
+    });
+  }
+  return chain;
+}
+
 app.get('/ap-review', (req, res) => {
   const buildingId = Number(req.query.building ?? 1);
   const selectedId = Number(req.query.invoice ?? 1);
@@ -91,8 +177,7 @@ app.get('/ap-review', (req, res) => {
   // Queue: invoices not yet paid
   const queueRaw = db.prepare(`
     SELECT i.id, i.invoice_number, i.total_cents, i.status, i.source, i.invoice_date,
-           v.name AS vendor_name, v.id AS vendor_id, v.approval_status,
-           v.requires_work_confirmation
+           v.name AS vendor_name, v.id AS vendor_id, v.approval_status
     FROM invoices i JOIN vendors v ON v.id = i.vendor_id
     WHERE i.building_id = ? AND i.status IN ('entered','coded')
     ORDER BY i.invoice_date DESC
@@ -106,19 +191,12 @@ app.get('/ap-review', (req, res) => {
     ).get(item.vendor_id) as any;
     if (!ins || ins.expiry_date < today)
       return { ...item, chip: { text: 'Insurance lapsed', cls: 'block' } };
-    if (item.requires_work_confirmation) {
+    if (hasServiceContract(item.vendor_id, buildingId, today)) {
       const wc = db.prepare('SELECT 1 FROM work_confirmations WHERE invoice_id = ?').get(item.id);
       if (!wc) return { ...item, chip: { text: 'Work unconfirmed', cls: 'block' } };
     }
-    const invMonth = parseInt(item.invoice_date.split('-')[1], 10);
-    const invYear = parseInt(item.invoice_date.split('-')[0], 10);
-    const overBudget = db.prepare(`
-      SELECT 1 FROM invoice_lines il
-      JOIN v_budget_vs_actual v ON v.gl_account_id = il.gl_account_id
-        AND v.building_id = ? AND v.fiscal_year = ? AND v.period = ?
-      WHERE il.invoice_id = ? AND v.actual_cents > v.budget_cents LIMIT 1
-    `).get(buildingId, invYear, invMonth, item.id);
-    if (overBudget) return { ...item, chip: { text: 'Over budget', cls: 'block' } };
+    if (hasOverrun(buildingId, item.id, item.invoice_date))
+      return { ...item, chip: { text: 'Over budget', cls: 'block' } };
     const pending = db.prepare(
       "SELECT 1 FROM approvals WHERE invoice_id = ? AND status IN ('pending','queued')"
     ).get(item.id);
@@ -127,10 +205,10 @@ app.get('/ap-review', (req, res) => {
 
   // Selected invoice detail
   const invoice = db.prepare(`
-    SELECT i.*, v.name AS vendor_name, v.approval_status, v.requires_work_confirmation, v.id AS vendor_id
+    SELECT i.*, v.name AS vendor_name, v.approval_status, v.id AS vendor_id
     FROM invoices i JOIN vendors v ON v.id = i.vendor_id WHERE i.id = ?
   `).get(selectedId) as any;
-  if (!invoice) return res.render('ap-review', { building, queue, selectedId, invoice: null, lines: [], gates: [], approvals: [], importInfo: null });
+  if (!invoice) return res.render('ap-review', { building, queue, selectedId, invoice: null, lines: [], gates: [], approvals: [], importInfo: null, rules: [] });
 
   const lines = db.prepare(`
     SELECT il.*, g.code AS gl_code, g.name AS gl_name
@@ -166,8 +244,9 @@ app.get('/ap-review', (req, res) => {
     chip: insValid ? 'Valid' : 'Lapsed',
   });
 
-  // 3. Work confirmed (only if vendor requires it)
-  if (invoice.requires_work_confirmation) {
+  // 3. Work confirmed (only if vendor has an active service contract for this building)
+  const contract = hasServiceContract(invoice.vendor_id, buildingId, today);
+  if (contract) {
     const wc = db.prepare('SELECT * FROM work_confirmations WHERE invoice_id = ? LIMIT 1').get(selectedId) as any;
     gates.push({
       name: 'Work confirmed on site',
@@ -215,14 +294,18 @@ app.get('/ap-review', (req, res) => {
     chip: budgetOk ? 'Within budget' : 'Adds approver',
   });
 
-  // Approval chain
-  const approvals = db.prepare(`
-    SELECT a.*, u.name AS user_name, u.role AS user_role
-    FROM approvals a JOIN users u ON u.id = a.user_id
-    WHERE a.invoice_id = ? ORDER BY a.step_order
-  `).all(selectedId) as any[];
+  // Approval chain — generated from rules, merged with persisted decisions
+  const approvals = buildChainFromRules(selectedId, invoice.total_cents, buildingId, invoice.invoice_date);
 
-  res.render('ap-review', { building, queue, selectedId, invoice, lines, gates, approvals, importInfo });
+  // Active rules for the rulenote
+  const rules = db.prepare(`
+    SELECT ar.trigger_type, ar.min_amount_cents, r.name AS role_name
+    FROM approval_rules ar JOIN roles r ON r.id = ar.required_role_id
+    WHERE ar.active = 1 AND (ar.scope = 'all' OR (ar.scope = 'building' AND ar.building_id = ?))
+    ORDER BY r.rank
+  `).all(buildingId) as any[];
+
+  res.render('ap-review', { building, queue, selectedId, invoice, lines, gates, approvals, importInfo, rules });
 });
 
 // One router per domain. Add: ap, leasing, vendors, capital, investor.

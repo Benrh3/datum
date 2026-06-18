@@ -84,12 +84,34 @@ INSERT INTO rent_steps (lease_id,effective_date,annual_rent_cents) VALUES
   (1,'2024-01-01',36000000),(1,'2025-01-01',37440000),(1,'2026-01-01',38937600),
   (2,'2025-03-01',48600000),(2,'2026-03-01',50058000);
 
--- Users for approval chain
-INSERT INTO users (id,name,email,role) VALUES
-  (1,'J. Tran','j.tran@hastingsholdings.ca','Building Manager'),
-  (2,'S. Okafor','s.okafor@hastingsholdings.ca','Property Manager'),
-  (3,'M. Reyes','m.reyes@hastingsholdings.ca','Controller'),
-  (4,'D. Cho','d.cho@hastingsholdings.ca','VP Finance');
+-- Roles (ranked: lower rank = earlier in chain)
+INSERT INTO roles (id,key,name,rank) VALUES
+  (1,'building_manager','Building Manager',10),
+  (2,'property_manager','Property Manager',20),
+  (3,'controller','Controller',30),
+  (4,'vp_finance','VP Finance',40);
+
+-- Users with role_id FK
+INSERT INTO users (id,name,email,role,role_id) VALUES
+  (1,'J. Tran','j.tran@hastingsholdings.ca','Building Manager',1),
+  (2,'S. Okafor','s.okafor@hastingsholdings.ca','Property Manager',2),
+  (3,'M. Reyes','m.reyes@hastingsholdings.ca','Controller',3),
+  (4,'D. Cho','d.cho@hastingsholdings.ca','VP Finance',4);
+
+-- Approval rules: data-driven routing
+--   1. Every invoice needs Building Manager + Property Manager
+--   2. Invoices over $10,000 also need Controller
+--   3. Budget overrun adds VP Finance
+INSERT INTO approval_rules (id,scope,trigger_type,min_amount_cents,required_role_id,active) VALUES
+  (1,'all','always',NULL,1,1),
+  (2,'all','always',NULL,2,1),
+  (3,'all','amount',1000000,3,1),
+  (4,'all','budget_overrun',NULL,4,1);
+
+-- Service contracts (replaces requires_work_confirmation boolean)
+INSERT INTO service_contracts (vendor_id,building_id,gl_account_id,description,amount_cents,frequency,start_date,end_date,active) VALUES
+  (1,1,11,'Roof maintenance & emergency repairs',0,'one_time','2026-01-01',NULL,1),
+  (4,1,14,'Grounds maintenance & snow removal',386600,'monthly','2025-04-01','2026-12-31',1);
 
 -- Vendor documents (insurance COI + banking)
 INSERT INTO vendor_documents (vendor_id,doc_type,description,expiry_date,uploaded_at) VALUES
@@ -106,7 +128,8 @@ INSERT INTO vendor_documents (vendor_id,doc_type,description,expiry_date,uploade
 INSERT INTO work_confirmations (invoice_id,confirmed_by,confirmed_at,notes) VALUES
   (1,'J. Tran','2026-06-16','Photos and sign-off by J. Tran, Building Manager');
 
--- Approval routing
+-- Approval decisions (persisted state for existing invoices; the chain itself
+-- is generated from approval_rules at render time)
 INSERT INTO approvals (invoice_id,user_id,step_order,status,reason,decided_at) VALUES
   (1,1,1,'approved','confirmed work complete','2026-06-16'),
   (1,2,2,'approved',NULL,'2026-06-17'),

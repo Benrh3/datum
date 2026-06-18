@@ -41,6 +41,19 @@ behave like a shippable product, not a toy.
 6. **Investor reporting — debt/mortgage stacking** — `loans` per building (balance, rate,
    maturity, LTV, DSCR) → portfolio debt-stack. Different audience; its own section.
 
+## Data-model invariants (do not simplify away)
+These encode the product's differentiation. Never collapse them into hardcoded
+logic or boolean flags to save effort. If a build needs one and it's missing,
+add it via a new numbered migration.
+- Approval routing is DATA-DRIVEN via an `approval_rules` table (scope + trigger +
+  threshold -> required role). Never hardcode thresholds in a route. "Configure
+  approvals without a developer" is a selling point.
+- Roles are a first-class ranked `roles` table, referenced by users and rules.
+- Recurring obligations live in `service_contracts`; the work-verification gate
+  reads `work_confirmations` against them, not a boolean on the vendor.
+- Money is always integer cents. Reports read from SQL views, not ad-hoc queries.
+- Schema changes are new numbered migrations; never edit an applied one.
+
 ## Rules
 - One commit per concern. Test before deploy.
 - Any **mutating** route (approve / reject / pay / vendor edits) requires auth from the
