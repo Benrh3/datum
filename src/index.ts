@@ -326,7 +326,83 @@ app.get('/ap-review', (req, res) => {
     ORDER BY r.rank
   `).all(buildingId) as any[];
 
-  res.render('ap-review', { building, buildingId, queue, selectedId, invoice, lines, gates, approvals, importInfo, rules });
+  // Unusual-code warnings: lines coded differently from vendor history
+  const vendorHistory = db.prepare(`
+    SELECT il.gl_account_id, COUNT(*) AS cnt FROM invoice_lines il
+    JOIN invoices i ON i.id = il.invoice_id
+    WHERE i.vendor_id = ? AND i.id != ? GROUP BY il.gl_account_id ORDER BY cnt DESC
+  `).all(invoice.vendor_id, selectedId) as any[];
+  const usualCodes = new Set(vendorHistory.map((h: any) => h.gl_account_id));
+  const unusualLines = vendorHistory.length > 0
+    ? lines.filter((l: any) => !usualCodes.has(l.gl_account_id)).map((l: any) => l.id)
+    : [];
+
+  // Reclassification history
+  const reclassHistory = db.prepare(`
+    SELECT r.*, gf.code AS from_code, gt.code AS to_code, gt.name AS to_name, u.name AS user_name
+    FROM reclassifications r
+    JOIN gl_accounts gf ON gf.id = r.from_gl_account_id
+    JOIN gl_accounts gt ON gt.id = r.to_gl_account_id
+    LEFT JOIN users u ON u.id = r.user_id
+    WHERE r.invoice_id = ? ORDER BY r.created_at DESC
+  `).all(selectedId) as any[];
+
+  // GL accounts for reclass dropdown
+  const glAccounts = db.prepare("SELECT id, code, name FROM gl_accounts WHERE is_postable = 1 ORDER BY sort_order").all() as any[];
+
+  res.render('ap-review', { building, buildingId, queue, selectedId, invoice, lines, gates, approvals, importInfo, rules, unusualLines, reclassHistory, glAccounts });
+});
+
+app.get('/reports/miscoding-review', (req, res) => {
+  const buildingId = Number(req.query.building ?? 0);
+  const year = Number(req.query.year ?? 2026);
+  const period = Number(req.query.period ?? 6);
+
+  // Lines coded differently from vendor norm
+  const unusualRows = db.prepare(`
+    SELECT il.id AS line_id, il.description, il.amount_cents, il.gl_account_id,
+           g.code AS line_code, g.name AS line_acct_name,
+           i.id AS invoice_id, i.invoice_number, i.invoice_date, i.status,
+           v.name AS vendor_name, v.id AS vendor_id, v.default_gl_account_id,
+           dg.code AS default_code, b.name AS building_name
+    FROM invoice_lines il
+    JOIN invoices i ON i.id = il.invoice_id
+    JOIN vendors v ON v.id = i.vendor_id
+    JOIN gl_accounts g ON g.id = il.gl_account_id
+    LEFT JOIN gl_accounts dg ON dg.id = v.default_gl_account_id
+    JOIN buildings b ON b.id = i.building_id
+    WHERE (? = 0 OR i.building_id = ?)
+      AND CAST(strftime('%Y', i.invoice_date) AS INTEGER) = ?
+      AND CAST(strftime('%m', i.invoice_date) AS INTEGER) = ?
+      AND v.default_gl_account_id IS NOT NULL
+      AND il.gl_account_id != v.default_gl_account_id
+    ORDER BY i.invoice_date DESC
+  `).all(buildingId, buildingId, year, period) as any[];
+
+  // Lines that pushed an account materially over budget (>10%)
+  const overBudgetRows = db.prepare(`
+    SELECT il.id AS line_id, il.description, il.amount_cents, il.gl_account_id,
+           g.code AS line_code, g.name AS line_acct_name,
+           i.id AS invoice_id, i.invoice_number, i.invoice_date,
+           v.name AS vendor_name, b.name AS building_name,
+           bva.budget_cents, bva.actual_cents
+    FROM invoice_lines il
+    JOIN invoices i ON i.id = il.invoice_id
+    JOIN vendors v ON v.id = i.vendor_id
+    JOIN gl_accounts g ON g.id = il.gl_account_id
+    JOIN buildings b ON b.id = i.building_id
+    JOIN v_budget_vs_actual bva ON bva.building_id = i.building_id
+      AND bva.gl_account_id = il.gl_account_id AND bva.fiscal_year = ?
+      AND bva.period = CAST(strftime('%m', i.invoice_date) AS INTEGER)
+    WHERE (? = 0 OR i.building_id = ?)
+      AND CAST(strftime('%Y', i.invoice_date) AS INTEGER) = ?
+      AND CAST(strftime('%m', i.invoice_date) AS INTEGER) = ?
+      AND bva.actual_cents > bva.budget_cents
+      AND (bva.actual_cents - bva.budget_cents) * 100 / bva.budget_cents > 10
+    ORDER BY (bva.actual_cents - bva.budget_cents) DESC
+  `).all(year, buildingId, buildingId, year, period) as any[];
+
+  res.render('reports-miscoding-review', { buildingId, year, period, unusualRows, overBudgetRows });
 });
 
 app.get('/reports/owner-statement', (req, res) => {

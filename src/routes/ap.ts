@@ -243,3 +243,163 @@ ap.post('/ingest-email', async (req, res) => {
     res.status(500).json({ error: err.message || 'Email ingestion failed' });
   }
 });
+
+// Reclassify an invoice line to a different GL code
+ap.post('/reclass', (req, res) => {
+  try {
+    const { line_id, to_gl_code, reason, user_id } = req.body;
+    if (!line_id || !to_gl_code || !reason) return res.status(400).json({ error: 'line_id, to_gl_code, and reason are required' });
+
+    const line = db.prepare(`
+      SELECT il.*, i.status AS invoice_status, i.building_id, i.id AS invoice_id, g.code AS from_code
+      FROM invoice_lines il
+      JOIN invoices i ON i.id = il.invoice_id
+      JOIN gl_accounts g ON g.id = il.gl_account_id
+      WHERE il.id = ?
+    `).get(line_id) as any;
+    if (!line) return res.status(404).json({ error: 'Line not found' });
+
+    const toAcct = db.prepare('SELECT id, code FROM gl_accounts WHERE code = ? AND is_postable = 1').get(to_gl_code) as any;
+    if (!toAcct) return res.status(400).json({ error: 'GL code ' + to_gl_code + ' not found or not postable' });
+    if (toAcct.id === line.gl_account_id) return res.status(400).json({ error: 'Already coded to ' + to_gl_code });
+
+    const isDraft = line.invoice_status === 'entered' || line.invoice_status === 'coded';
+
+    if (isDraft) {
+      db.prepare('UPDATE invoice_lines SET gl_account_id = ?, coding_source = ? WHERE id = ?')
+        .run(toAcct.id, 'manual', line_id);
+      db.prepare(`INSERT INTO audit_log (table_name, record_id, action, old_values, new_values, user_id)
+        VALUES ('invoice_lines', ?, 'reclass_draft', ?, ?, ?)`).run(
+        line_id,
+        JSON.stringify({ gl_account_id: line.gl_account_id, code: line.from_code }),
+        JSON.stringify({ gl_account_id: toAcct.id, code: to_gl_code }),
+        user_id ?? null,
+      );
+      res.json({ ok: true, method: 'draft_edit' });
+    } else {
+      const reclass = db.prepare(`
+        INSERT INTO reclassifications (invoice_line_id, invoice_id, from_gl_account_id, to_gl_account_id, amount_cents, reason, user_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(line.id, line.invoice_id, line.gl_account_id, toAcct.id, line.amount_cents, reason, user_id ?? null);
+      const reclassId = Number(reclass.lastInsertRowid);
+
+      db.prepare(`INSERT INTO audit_log (table_name, record_id, action, old_values, new_values, user_id)
+        VALUES ('reclassifications', ?, 'reclass_posted', ?, ?, ?)`).run(
+        reclassId,
+        JSON.stringify({ gl_account_id: line.gl_account_id, code: line.from_code }),
+        JSON.stringify({ gl_account_id: toAcct.id, code: to_gl_code, reason }),
+        user_id ?? null,
+      );
+
+      let transfer_needed = false;
+      // TODO: cross-building reclass detection — when a line is recoded to an
+      // account that belongs to a different building or entity, spawn an
+      // inter_account_transfer and link it to this reclassification.
+
+      res.json({ ok: true, method: 'reclass_entry', reclass_id: reclassId, transfer_needed });
+    }
+  } catch (err: any) {
+    console.error('[ap/reclass]', err);
+    res.status(500).json({ error: err.message || 'Reclassification failed' });
+  }
+});
+
+// Budget swing for a proposed reclass: what happens to both accounts
+ap.get('/budget-swing', (req, res) => {
+  try {
+    const lineId = Number(req.query.line_id);
+    const toCode = String(req.query.to_gl_code ?? '');
+    if (!lineId || !toCode) return res.status(400).json({ error: 'line_id and to_gl_code required' });
+
+    const line = db.prepare(`
+      SELECT il.*, i.building_id, i.invoice_date, g.code AS from_code, g.name AS from_name
+      FROM invoice_lines il JOIN invoices i ON i.id = il.invoice_id
+      JOIN gl_accounts g ON g.id = il.gl_account_id WHERE il.id = ?
+    `).get(lineId) as any;
+    if (!line) return res.status(404).json({ error: 'Line not found' });
+
+    const toAcct = db.prepare('SELECT id, code, name FROM gl_accounts WHERE code = ? AND is_postable = 1').get(toCode) as any;
+    if (!toAcct) return res.status(400).json({ error: 'GL code not found' });
+
+    const m = parseInt(line.invoice_date.split('-')[1], 10);
+    const y = parseInt(line.invoice_date.split('-')[0], 10);
+
+    function getVariance(acctId: number) {
+      const bva = db.prepare(
+        'SELECT budget_cents, actual_cents FROM v_budget_vs_actual WHERE building_id = ? AND gl_account_id = ? AND fiscal_year = ? AND period = ?'
+      ).get(line.building_id, acctId, y, m) as any;
+      return bva ? { budget: bva.budget_cents, actual: bva.actual_cents, variance: bva.actual_cents - bva.budget_cents } : null;
+    }
+
+    const fromBefore = getVariance(line.gl_account_id);
+    const toBefore = getVariance(toAcct.id);
+    const amt = line.amount_cents;
+
+    res.json({
+      amount_cents: amt,
+      from: { code: line.from_code, name: line.from_name,
+        before: fromBefore, after: fromBefore ? { ...fromBefore, actual: fromBefore.actual - amt, variance: fromBefore.variance - amt } : null },
+      to: { code: toAcct.code, name: toAcct.name,
+        before: toBefore, after: toBefore ? { ...toBefore, actual: toBefore.actual + amt, variance: toBefore.variance + amt } : null },
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Unusual-code warning: check if a line's code deviates from vendor history
+ap.get('/unusual-code', (req, res) => {
+  try {
+    const invoiceId = Number(req.query.invoice_id);
+    if (!invoiceId) return res.status(400).json({ error: 'invoice_id required' });
+
+    const invoice = db.prepare('SELECT vendor_id FROM invoices WHERE id = ?').get(invoiceId) as any;
+    if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
+
+    const history = db.prepare(`
+      SELECT il.gl_account_id, g.code, COUNT(*) AS cnt
+      FROM invoice_lines il
+      JOIN invoices i ON i.id = il.invoice_id
+      JOIN gl_accounts g ON g.id = il.gl_account_id
+      WHERE i.vendor_id = ? AND i.id != ?
+      GROUP BY il.gl_account_id ORDER BY cnt DESC
+    `).all(invoice.vendor_id, invoiceId) as any[];
+    const historyCodes = new Set(history.map((h: any) => h.gl_account_id));
+
+    const lines = db.prepare(`
+      SELECT il.id, il.gl_account_id, g.code, g.name
+      FROM invoice_lines il JOIN gl_accounts g ON g.id = il.gl_account_id
+      WHERE il.invoice_id = ?
+    `).all(invoiceId) as any[];
+
+    const unusual = lines
+      .filter((l: any) => historyCodes.size > 0 && !historyCodes.has(l.gl_account_id))
+      .map((l: any) => ({ line_id: l.id, code: l.code, name: l.name, vendor_usual: history.slice(0, 3).map((h: any) => h.code) }));
+
+    res.json({ unusual });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Reclassification history for an invoice
+ap.get('/reclass-history', (req, res) => {
+  try {
+    const invoiceId = Number(req.query.invoice_id);
+    if (!invoiceId) return res.status(400).json({ error: 'invoice_id required' });
+
+    const rows = db.prepare(`
+      SELECT r.*, gf.code AS from_code, gf.name AS from_name, gt.code AS to_code, gt.name AS to_name,
+             u.name AS user_name
+      FROM reclassifications r
+      JOIN gl_accounts gf ON gf.id = r.from_gl_account_id
+      JOIN gl_accounts gt ON gt.id = r.to_gl_account_id
+      LEFT JOIN users u ON u.id = r.user_id
+      ORDER BY r.created_at DESC
+    `).all() as any[];
+
+    res.json({ reclassifications: rows.filter((r: any) => r.invoice_id === invoiceId) });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});

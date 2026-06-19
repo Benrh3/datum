@@ -169,6 +169,13 @@ INSERT INTO approvals (invoice_id,user_id,step_order,status) VALUES
   (10,1,1,'queued'),
   (11,2,1,'queued');
 
+-- Sample reclassification: invoice 6 (insurance) had a line miscoded to 5100 R&M,
+-- reclassified to 6200 Insurance after posting
+INSERT INTO reclassifications (invoice_line_id, invoice_id, from_gl_account_id, to_gl_account_id, amount_cents, reason, user_id, created_at)
+  VALUES (8, 6, 11, 22, 1245000, 'Originally miscoded to R&M — should be Insurance premium', 2, '2026-06-03');
+INSERT INTO audit_log (table_name, record_id, action, old_values, new_values, user_id, created_at)
+  VALUES ('reclassifications', 1, 'reclass_posted', '{"gl_account_id":11,"code":"5100"}', '{"gl_account_id":22,"code":"6200","reason":"Originally miscoded to R&M"}', 2, '2026-06-03');
+
 -- Portfolio ownership (entity A=1 bldg, B=5 sole + 40% shared, C=60% shared + 1 sole)
 INSERT INTO building_ownership (building_id,entity_id,ownership_bps) VALUES
   (1,1,10000),

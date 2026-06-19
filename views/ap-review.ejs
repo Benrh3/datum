@@ -124,6 +124,13 @@ function fmtDate(iso) {
   .prov.suggest i{color:var(--mint);font-style:normal;font-family:var(--mono);}
   .prov.lowconf{color:var(--clay);}
   .needcode{color:var(--clay);font-size:12px;cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;}
+  .unusual{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--clay);margin-top:3px;}
+  .reclass-btn{font-size:11px;color:var(--text-faint);cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;border:none;background:none;font:inherit;padding:0;}
+  .reclass-btn:hover{color:var(--text);}
+  .reclass-row{background:var(--surface-2);font-size:12.5px;}
+  .reclass-row td{padding:10px 14px!important;border-bottom:1px solid var(--hairline);}
+  .swing{display:flex;gap:14px;margin-top:6px;font-family:var(--mono);font-size:11.5px;}
+  .swing .fav{color:var(--mint);} .swing .unf{color:var(--clay);}
 
   /* approval chain */
   .chain{position:relative;padding-left:6px;}
@@ -256,6 +263,7 @@ function fmtDate(iso) {
               <tbody>
 <% for (const l of lines) {
      const isLow = l.coding_source === 'ai_suggested' && l.confidence != null && l.confidence < 80;
+     const isUnusual = unusualLines.includes(l.id);
 %>
                 <tr>
                   <td class="l"><%= l.description %>
@@ -266,8 +274,13 @@ function fmtDate(iso) {
 <% } else if (isLow) { %>
                       <div class="prov lowconf">Suggested &middot; <%= l.confidence %>% — <span class="needcode">confirm code</span></div>
 <% } %>
+<% if (isUnusual) { %>
+                      <div class="unusual">Unusual code for this vendor</div>
+<% } %>
                   </td>
-                  <td class="code"<% if (isLow) { %> style="color:var(--clay)"<% } %>><%= l.gl_code %><% if (isLow) { %> ?<% } else { %> &middot; <%- l.gl_name.replace(/&/g, '&amp;').replace(/</g, '&lt;').length > 20 ? l.gl_name.substring(0,18).replace(/&/g, '&amp;') + '…' : l.gl_name.replace(/&/g, '&amp;') %><% } %></td>
+                  <td class="code"<% if (isLow) { %> style="color:var(--clay)"<% } %>><%= l.gl_code %><% if (isLow) { %> ?<% } else { %> &middot; <%- l.gl_name.replace(/&/g, '&amp;').replace(/</g, '&lt;').length > 20 ? l.gl_name.substring(0,18).replace(/&/g, '&amp;') + '…' : l.gl_name.replace(/&/g, '&amp;') %><% } %>
+                    <div><button class="reclass-btn" data-line="<%= l.id %>" data-code="<%= l.gl_code %>">Reclassify</button></div>
+                  </td>
                   <td class="num"><%= fmt(l.amount_cents) %></td>
                 </tr>
 <% } %>
@@ -276,6 +289,23 @@ function fmtDate(iso) {
             </table>
           </div>
         </div>
+
+<% if (reclassHistory.length > 0) { %>
+        <div class="sect">
+          <h3>Reclassification history</h3>
+          <div class="gates">
+<% for (const r of reclassHistory) { %>
+            <div class="gate warn">
+              <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M17 1l4 4-4 4M7 23l-4-4 4-4M14 3H7a4 4 0 00-4 4v2m14 6v2a4 4 0 01-4 4h-3"/></svg></span>
+              <span class="lbl"><b><%= r.from_code %> → <%= r.to_code %></b>
+                <span><%= fmt(r.amount_cents) %> &middot; <%= r.reason %><% if (r.user_name) { %> &middot; <%= r.user_name %><% } %></span>
+              </span>
+              <span class="st chip block"><%= r.transfer_id ? 'Transferred' : 'Reclass' %></span>
+            </div>
+<% } %>
+          </div>
+        </div>
+<% } %>
 
         <!-- approval routing -->
 <% if (approvals.length > 0) { %>
@@ -437,6 +467,56 @@ function fmtDate(iso) {
             + '<div style="margin-top:8px"><button class="btn" data-retry style="font-size:12px;padding:6px 12px">Retry</button> <button class="btn" data-dismiss style="font-size:12px;padding:6px 12px">Dismiss</button></div>');
         });
     }
+  });
+  // Reclassify button handler
+  document.querySelectorAll('.reclass-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var lineId = this.dataset.line;
+      var currentCode = this.dataset.code;
+      var row = this.closest('tr');
+      var existing = row.nextElementSibling;
+      if (existing && existing.classList.contains('reclass-row')) { existing.remove(); return; }
+
+      var tr = document.createElement('tr');
+      tr.className = 'reclass-row';
+      tr.innerHTML = '<td colspan="3" class="l">'
+        + '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+        + '<select class="ctl" id="rc-code-' + lineId + '" style="height:28px;font-size:12px;padding:0 24px 0 8px">'
+        + '<% for (const g of glAccounts) { %><option value="<%= g.code %>"<%= g.code === "' + currentCode + '" ? " disabled" : "" %>><%= g.code %> — <%= g.name %></option><% } %>'
+        + '</select>'
+        + '<input class="ctl" id="rc-reason-' + lineId + '" placeholder="Reason…" style="height:28px;font-size:12px;flex:1;min-width:120px">'
+        + '<button class="btn" id="rc-go-' + lineId + '" style="font-size:11px;padding:5px 10px">Apply</button>'
+        + '<span id="rc-swing-' + lineId + '" style="font-size:11px;color:var(--text-faint)"></span>'
+        + '</div></td>';
+      row.after(tr);
+
+      var codeSelect = document.getElementById('rc-code-' + lineId);
+      var swingEl = document.getElementById('rc-swing-' + lineId);
+      codeSelect.addEventListener('change', function () {
+        fetch(origin + '/api/ap/budget-swing?line_id=' + lineId + '&to_gl_code=' + this.value)
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            if (!d.from) { swingEl.textContent = ''; return; }
+            var parts = [];
+            if (d.from.after) parts.push(d.from.code + ': ' + (d.from.after.variance < d.from.before.variance ? '↓' : '↑') + '$' + Math.abs(d.from.after.variance - d.from.before.variance) / 100);
+            if (d.to.after) parts.push(d.to.code + ': ' + (d.to.after.variance > d.to.before.variance ? '↑' : '↓') + '$' + Math.abs(d.to.after.variance - d.to.before.variance) / 100);
+            swingEl.textContent = parts.length ? 'Budget swing: ' + parts.join(', ') : '';
+          });
+      });
+
+      document.getElementById('rc-go-' + lineId).addEventListener('click', function () {
+        var code = codeSelect.value;
+        var reason = document.getElementById('rc-reason-' + lineId).value;
+        if (!reason) { alert('Please enter a reason for the reclassification.'); return; }
+        fetch(origin + '/api/ap/reclass', {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ line_id: Number(lineId), to_gl_code: code, reason: reason })
+        }).then(function (r) { return r.json(); }).then(function (d) {
+          if (d.ok) window.location.reload();
+          else alert(d.error || 'Reclassification failed');
+        });
+      });
+    });
   });
 })();
 </script>
