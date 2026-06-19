@@ -197,10 +197,10 @@ function fmtDate(iso) {
         <div class="crumb"><b>Accounting</b> &nbsp;/&nbsp; Accounts payable</div>
         <h1>Review queue</h1>
       </div>
-      <input type="file" id="upload-input" accept="application/pdf,image/jpeg,image/png,image/webp" hidden>
+      <input type="file" id="upload-input" accept="application/pdf,image/jpeg,image/png,image/webp" multiple hidden>
       <button class="btn btn-primary" id="upload-btn">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 16V4m0 0L8 8m4-4l4 4M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
-        <span id="upload-label">Upload invoice</span>
+        <span id="upload-label">Upload invoices</span>
       </button>
     </div>
 
@@ -341,71 +341,102 @@ function fmtDate(iso) {
   var input = document.getElementById('upload-input');
   var label = document.getElementById('upload-label');
   var topbar = btn.parentNode;
-  var errorEl = null;
+  var panelEl = null;
 
-  function clearError() {
-    if (errorEl) { errorEl.remove(); errorEl = null; }
-  }
+  function clearPanel() { if (panelEl) { panelEl.remove(); panelEl = null; } }
 
-  function showError(msg) {
-    clearError();
-    errorEl = document.createElement('div');
-    errorEl.style.cssText = 'position:absolute;top:100%;right:var(--pad);background:var(--surface);border:1px solid var(--hairline);border-radius:var(--r);padding:14px 18px;max-width:380px;z-index:10;font-size:13px;color:var(--text);box-shadow:0 4px 16px rgba(0,0,0,.3)';
-    errorEl.innerHTML = '<div style="color:var(--clay);font-weight:500;margin-bottom:6px">Upload failed</div>'
-      + '<div style="color:var(--text-dim);margin-bottom:12px;line-height:1.5">' + msg.replace(/</g, '&lt;') + '</div>'
-      + '<div style="display:flex;gap:8px">'
-      + '<button class="btn" id="err-retry" style="font-size:12px;padding:6px 12px">Retry</button>'
-      + '<button class="btn" id="err-dismiss" style="font-size:12px;padding:6px 12px">Dismiss</button>'
-      + '</div>';
+  function showPanel(html) {
+    clearPanel();
+    panelEl = document.createElement('div');
+    panelEl.style.cssText = 'position:absolute;top:100%;right:var(--pad);background:var(--surface);border:1px solid var(--hairline);border-radius:var(--r);padding:14px 18px;max-width:420px;z-index:10;font-size:13px;color:var(--text);box-shadow:0 4px 16px rgba(0,0,0,.3)';
+    panelEl.innerHTML = html;
     topbar.style.position = 'relative';
-    topbar.appendChild(errorEl);
-    document.getElementById('err-retry').addEventListener('click', function () { clearError(); input.click(); });
-    document.getElementById('err-dismiss').addEventListener('click', clearError);
+    topbar.appendChild(panelEl);
+    var dismiss = panelEl.querySelector('[data-dismiss]');
+    if (dismiss) dismiss.addEventListener('click', clearPanel);
+    var retry = panelEl.querySelector('[data-retry]');
+    if (retry) retry.addEventListener('click', function () { clearPanel(); input.click(); });
   }
 
   function reset() {
-    label.textContent = 'Upload invoice';
+    label.textContent = 'Upload invoices';
     btn.disabled = false;
-    try { input.value = ''; } catch (_) { /* WebKit may throw on file input reset */ }
+    try { input.value = ''; } catch (_) {}
   }
 
-  var uploadUrl = window.location.origin + '/api/ap/upload';
-
-  btn.addEventListener('click', function () { clearError(); input.click(); });
+  var origin = window.location.origin;
+  btn.addEventListener('click', function () { clearPanel(); input.click(); });
 
   input.addEventListener('change', function () {
-    var file = this.files[0];
-    if (!file) return;
+    var files = this.files;
+    if (!files || !files.length) return;
+    clearPanel();
 
-    clearError();
-    label.textContent = 'Reading…';
+    var isSingle = files.length === 1;
+    label.textContent = isSingle ? 'Reading…' : 'Reading ' + files.length + ' files…';
     btn.disabled = true;
 
     var form = new FormData();
-    form.append('file', file);
-
-    fetch(uploadUrl, { method: 'POST', body: form })
-      .then(function (r) {
-        var ct = r.headers.get('content-type') || '';
-        if (!r.ok) {
-          if (ct.indexOf('application/json') !== -1) return r.json().then(function (d) { throw new Error(d.error || 'Server error (' + r.status + ')'); });
-          throw new Error('Server error (' + r.status + ')');
-        }
-        if (ct.indexOf('application/json') === -1) throw new Error('Unexpected response from server');
-        return r.json();
-      })
-      .then(function (data) {
-        if (data.ok && data.invoice_id) {
-          window.location.href = '/ap-review?invoice=' + data.invoice_id;
-        } else {
+    if (isSingle) {
+      form.append('file', files[0]);
+      fetch(origin + '/api/ap/upload', { method: 'POST', body: form })
+        .then(function (r) {
+          var ct = r.headers.get('content-type') || '';
+          if (!r.ok) {
+            if (ct.indexOf('json') !== -1) return r.json().then(function (d) { throw new Error(d.error || 'Server error'); });
+            throw new Error('Server error (' + r.status + ')');
+          }
+          return r.json();
+        })
+        .then(function (data) {
+          if (data.ok && data.invoice_id && !data.duplicate_of) {
+            window.location.href = '/ap-review?invoice=' + data.invoice_id;
+          } else if (data.duplicate_of) {
+            reset();
+            showPanel('<div style="color:var(--clay);font-weight:500;margin-bottom:6px">Possible duplicate</div>'
+              + '<div style="color:var(--text-dim);margin-bottom:12px">This invoice matches an existing record.</div>'
+              + '<div style="display:flex;gap:8px"><button class="btn" data-dismiss style="font-size:12px;padding:6px 12px">Dismiss</button></div>');
+          } else {
+            reset();
+            showPanel('<div style="color:var(--clay);font-weight:500;margin-bottom:6px">Upload failed</div>'
+              + '<div style="color:var(--text-dim);margin-bottom:12px">' + (data.error || 'Could not process document.').replace(/</g,'&lt;') + '</div>'
+              + '<div style="display:flex;gap:8px"><button class="btn" data-retry style="font-size:12px;padding:6px 12px">Retry</button>'
+              + '<button class="btn" data-dismiss style="font-size:12px;padding:6px 12px">Dismiss</button></div>');
+          }
+        })
+        .catch(function (err) {
           reset();
-          showError(data.error || 'Upload failed — the document could not be processed.');
-        }
-      })
-      .catch(function (err) {
-        reset();
-        showError(err.message || 'Connection failed. Check your network and try again.');
-      });
+          showPanel('<div style="color:var(--clay);font-weight:500;margin-bottom:6px">Upload failed</div>'
+            + '<div style="color:var(--text-dim);margin-bottom:12px">' + (err.message || 'Connection failed.').replace(/</g,'&lt;') + '</div>'
+            + '<div style="display:flex;gap:8px"><button class="btn" data-retry style="font-size:12px;padding:6px 12px">Retry</button>'
+            + '<button class="btn" data-dismiss style="font-size:12px;padding:6px 12px">Dismiss</button></div>');
+        });
+    } else {
+      for (var i = 0; i < files.length; i++) form.append('files', files[i]);
+      fetch(origin + '/api/ap/upload-batch', { method: 'POST', body: form })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          reset();
+          if (!data.results) { showPanel('<div style="color:var(--clay)">Batch failed: ' + (data.error || 'unknown').replace(/</g,'&lt;') + '</div>'); return; }
+          var lines = data.results.map(function (r) {
+            var icon = r.ok ? (r.duplicate_of ? '<span style="color:var(--clay)">dup</span>' : '<span style="color:var(--mint)">ok</span>') : '<span style="color:var(--clay)">err</span>';
+            var detail = r.error ? r.error : r.duplicate_of ? 'duplicate' : '#' + r.invoice_id;
+            return '<div style="display:flex;justify-content:space-between;padding:4px 0">' + icon + ' <span style="flex:1;margin:0 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + r.filename.replace(/</g,'&lt;') + '</span><span style="color:var(--text-faint)">' + detail + '</span></div>';
+          }).join('');
+          var ok = data.results.filter(function(r){return r.ok && !r.duplicate_of;});
+          showPanel('<div style="font-weight:500;margin-bottom:10px">' + data.results.length + ' files processed</div>'
+            + '<div style="font-family:var(--mono);font-size:12px">' + lines + '</div>'
+            + '<div style="display:flex;gap:8px;margin-top:12px">'
+            + (ok.length === 1 ? '<a class="btn" href="/ap-review?invoice=' + ok[0].invoice_id + '" style="font-size:12px;padding:6px 12px">View invoice</a>' : '')
+            + (ok.length > 1 ? '<a class="btn" href="/ap-review" style="font-size:12px;padding:6px 12px">View queue</a>' : '')
+            + '<button class="btn" data-dismiss style="font-size:12px;padding:6px 12px">Dismiss</button></div>');
+        })
+        .catch(function (err) {
+          reset();
+          showPanel('<div style="color:var(--clay)">Batch failed: ' + (err.message || 'Connection error').replace(/</g,'&lt;') + '</div>'
+            + '<div style="margin-top:8px"><button class="btn" data-retry style="font-size:12px;padding:6px 12px">Retry</button> <button class="btn" data-dismiss style="font-size:12px;padding:6px 12px">Dismiss</button></div>');
+        });
+    }
   });
 })();
 </script>
