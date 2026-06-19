@@ -16,6 +16,11 @@ app.set('views', join(here, '../views'));
 app.use(express.json());
 app.use(express.static(join(here, '../public')));
 
+app.use((_req, res, next) => {
+  (res.locals as any).allBuildings = db.prepare('SELECT id, name, address, city, rentable_area_sqft FROM buildings ORDER BY name').all();
+  next();
+});
+
 app.get('/', (_req, res) => res.render('index'));
 app.get('/api/health', (_req, res) => res.json({ ok: true, ts: new Date().toISOString() }));
 
@@ -212,7 +217,7 @@ app.get('/ap-review', (req, res) => {
     SELECT i.*, v.name AS vendor_name, v.approval_status, v.id AS vendor_id
     FROM invoices i JOIN vendors v ON v.id = i.vendor_id WHERE i.id = ?
   `).get(selectedId) as any;
-  if (!invoice) return res.render('ap-review', { building, queue, selectedId, invoice: null, lines: [], gates: [], approvals: [], importInfo: null, rules: [] });
+  if (!invoice) return res.render('ap-review', { building, buildingId, queue, selectedId, invoice: null, lines: [], gates: [], approvals: [], importInfo: null, rules: [] });
 
   const lines = db.prepare(`
     SELECT il.*, g.code AS gl_code, g.name AS gl_name
@@ -321,7 +326,44 @@ app.get('/ap-review', (req, res) => {
     ORDER BY r.rank
   `).all(buildingId) as any[];
 
-  res.render('ap-review', { building, queue, selectedId, invoice, lines, gates, approvals, importInfo, rules });
+  res.render('ap-review', { building, buildingId, queue, selectedId, invoice, lines, gates, approvals, importInfo, rules });
+});
+
+app.get('/reports/owner-statement', (req, res) => {
+  const entityId = Number(req.query.entity ?? 0);
+  const year = Number(req.query.year ?? 2026);
+  const period = Number(req.query.period ?? 6);
+
+  const entities = db.prepare('SELECT * FROM entities ORDER BY name').all() as any[];
+  const entity = entityId ? db.prepare('SELECT * FROM entities WHERE id = ?').get(entityId) as any : null;
+
+  if (!entity) return res.render('reports-owner-statement', { entities, entity: null, rows: [], year, period, totalBudget: 0, totalActual: 0 });
+
+  const owned = db.prepare(`
+    SELECT bo.ownership_bps, b.id AS building_id, b.name AS building_name
+    FROM building_ownership bo JOIN buildings b ON b.id = bo.building_id
+    WHERE bo.entity_id = ? ORDER BY b.name
+  `).all(entityId) as any[];
+
+  const rows: any[] = [];
+  let totalBudget = 0, totalActual = 0;
+  for (const ob of owned) {
+    const bva = db.prepare(
+      'SELECT COALESCE(SUM(budget_cents),0) AS b, COALESCE(SUM(actual_cents),0) AS a FROM v_budget_vs_actual WHERE building_id = ? AND fiscal_year = ? AND period = ?'
+    ).get(ob.building_id, year, period) as any;
+    const share = ob.ownership_bps / 10000;
+    const bud = Math.round(bva.b * share);
+    const act = Math.round(bva.a * share);
+    rows.push({
+      building_name: ob.building_name, building_id: ob.building_id,
+      ownership_pct: (ob.ownership_bps / 100).toFixed(0),
+      budget_cents: bud, actual_cents: act, variance_cents: act - bud,
+    });
+    totalBudget += bud;
+    totalActual += act;
+  }
+
+  res.render('reports-owner-statement', { entities, entity, rows, year, period, totalBudget, totalActual });
 });
 
 // One router per domain. Add: leasing, vendors, capital, investor.

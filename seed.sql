@@ -1,8 +1,20 @@
--- Demo data: Cordova Exchange, Q2 2026. Money in integer cents. Period 6 carries
--- the quarter figures. Run with `npm run seed`.
-INSERT INTO entities (id,name,legal_form) VALUES (1,'Hastings Holdings LP','LP');
-INSERT INTO buildings (id,entity_id,name,address,city,rentable_area_sqft)
-  VALUES (1,1,'Cordova Exchange','525 W Cordova St','Vancouver',100000);
+-- Demo data: Hastings Holdings Group portfolio, Q2 2026. Money in integer cents.
+-- Period 6 carries the quarter figures. Run with `npm run seed`.
+INSERT INTO orgs (id,name) VALUES (1,'Hastings Holdings Group');
+INSERT INTO entities (id,name,legal_form,org_id) VALUES
+  (1,'Hastings Holdings LP','LP',1),
+  (2,'Bayside Properties Inc','Corp',1),
+  (3,'Pacific Gate Capital','LP',1);
+
+INSERT INTO buildings (id,entity_id,name,address,city,rentable_area_sqft) VALUES
+  (1,1,'Cordova Exchange','525 W Cordova St','Vancouver',100000),
+  (2,2,'Marine Gateway Tower','450 SW Marine Dr','Vancouver',75000),
+  (3,2,'Granville Square','200 Granville St','Vancouver',52000),
+  (4,2,'Harbour Centre','555 W Hastings St','Vancouver',120000),
+  (5,2,'Waterfront Place','1055 Canada Pl','Vancouver',42000),
+  (6,2,'Gastown Lofts','312 Water St','Vancouver',28000),
+  (7,2,'Pacific Rim Plaza','1088 Burrard St','Vancouver',65000),
+  (8,3,'Cambie Commons','4250 Cambie St','Vancouver',34000);
 INSERT INTO suites (building_id,suite_number,floor,rentable_area_sqft,status) VALUES
   (1,'200',2,12000,'occupied'),(1,'300',3,18000,'occupied'),(1,'400',4,9000,'vacant'),
   (1,'500',5,15500,'occupied'),(1,'510',5,6200,'vacant'),
@@ -156,3 +168,33 @@ INSERT INTO approvals (invoice_id,user_id,step_order,status,reason,decided_at) V
 INSERT INTO approvals (invoice_id,user_id,step_order,status) VALUES
   (10,1,1,'queued'),
   (11,2,1,'queued');
+
+-- Portfolio ownership (entity A=1 bldg, B=5 sole + 40% shared, C=60% shared + 1 sole)
+INSERT INTO building_ownership (building_id,entity_id,ownership_bps) VALUES
+  (1,1,10000),
+  (2,2,10000),(3,2,10000),(4,2,10000),(5,2,10000),(6,2,10000),
+  (7,2,4000),(7,3,6000),
+  (8,3,10000);
+
+-- Budgets for other buildings (minimal, for the owner-statement report)
+INSERT INTO budgets (building_id,gl_account_id,fiscal_year,period,amount_cents) VALUES
+  (2,11,2026,6,1500000),(2,12,2026,6,2200000),(2,21,2026,6,7000000),(2,23,2026,6,1800000),
+  (3,11,2026,6,800000),(3,12,2026,6,1400000),(3,21,2026,6,4200000),(3,23,2026,6,1100000),
+  (4,11,2026,6,2400000),(4,12,2026,6,3600000),(4,21,2026,6,10800000),(4,23,2026,6,2800000),
+  (7,11,2026,6,1200000),(7,12,2026,6,1800000),(7,21,2026,6,5500000),(7,23,2026,6,1400000);
+
+-- Paid invoices for buildings 2, 4, 7 (so the owner statement shows real actuals)
+INSERT INTO invoices (id,vendor_id,building_id,invoice_number,invoice_date,total_cents,status) VALUES
+  (12,1,2,'MG-TAX-Q2','2026-06-01',7200000,'paid'),
+  (13,1,2,'MG-MGMT-06','2026-06-01',1720000,'paid'),
+  (14,1,4,'HC-TAX-Q2','2026-06-01',11200000,'paid'),
+  (15,1,4,'HC-MGMT-06','2026-06-01',2650000,'paid'),
+  (16,1,7,'PR-TAX-Q2','2026-06-01',5800000,'paid'),
+  (17,1,7,'PR-MGMT-06','2026-06-01',1350000,'paid');
+INSERT INTO invoice_lines (invoice_id,gl_account_id,description,amount_cents) VALUES
+  (12,21,'Property taxes Q2 — Marine Gateway',7200000),
+  (13,23,'Management fee June — Marine Gateway',1720000),
+  (14,21,'Property taxes Q2 — Harbour Centre',11200000),
+  (15,23,'Management fee June — Harbour Centre',2650000),
+  (16,21,'Property taxes Q2 — Pacific Rim',5800000),
+  (17,23,'Management fee June — Pacific Rim',1350000);
