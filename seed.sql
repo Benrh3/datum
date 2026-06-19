@@ -205,3 +205,19 @@ INSERT INTO invoice_lines (invoice_id,gl_account_id,description,amount_cents) VA
   (15,23,'Management fee June — Harbour Centre',2650000),
   (16,21,'Property taxes Q2 — Pacific Rim',5800000),
   (17,23,'Management fee June — Pacific Rim',1350000);
+
+-- Bank accounts: operating per entity, trust + security deposit for key buildings
+INSERT INTO bank_accounts (id,entity_id,building_id,type,name,last4) VALUES
+  (1,1,NULL,'operating','Hastings Holdings LP — Operating','4821'),
+  (2,2,NULL,'operating','Bayside Properties — Operating','7733'),
+  (3,3,NULL,'operating','Pacific Gate Capital — Operating','5540'),
+  (4,1,1,'trust','Cordova Exchange — Trust','9201'),
+  (5,1,1,'security_deposit','Cordova Exchange — Security Deposits','9202'),
+  (6,2,4,'trust','Harbour Centre — Trust','3310'),
+  (7,2,7,'trust','Pacific Rim Plaza — Trust','3311'),
+  (8,3,8,'security_deposit','Cambie Commons — Security Deposits','8801');
+
+-- Link paid invoices to their entity's operating account
+UPDATE invoices SET paid_from_bank_account_id = 1 WHERE building_id = 1 AND status = 'paid';
+UPDATE invoices SET paid_from_bank_account_id = 2 WHERE building_id IN (2,3,4,5,6,7) AND status = 'paid';
+UPDATE invoices SET paid_from_bank_account_id = 3 WHERE building_id = 8 AND status = 'paid';
