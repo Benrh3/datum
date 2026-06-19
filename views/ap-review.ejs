@@ -178,7 +178,7 @@ function fmtDate(iso) {
         <div class="crumb"><b>Accounting</b> &nbsp;/&nbsp; Accounts payable</div>
         <h1>Review queue</h1>
       </div>
-      <input type="file" id="upload-input" accept=".pdf,image/jpeg,image/png,image/webp" hidden>
+      <input type="file" id="upload-input" accept="application/pdf,image/jpeg,image/png,image/webp" hidden>
       <button class="btn btn-primary" id="upload-btn">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 16V4m0 0L8 8m4-4l4 4M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
         <span id="upload-label">Upload invoice</span>
@@ -343,8 +343,10 @@ function fmtDate(iso) {
   function reset() {
     label.textContent = 'Upload invoice';
     btn.disabled = false;
-    input.value = '';
+    try { input.value = ''; } catch (_) { /* WebKit may throw on file input reset */ }
   }
+
+  var uploadUrl = window.location.origin + '/api/ap/upload';
 
   btn.addEventListener('click', function () { clearError(); input.click(); });
 
@@ -359,9 +361,14 @@ function fmtDate(iso) {
     var form = new FormData();
     form.append('file', file);
 
-    fetch('/api/ap/upload', { method: 'POST', body: form })
+    fetch(uploadUrl, { method: 'POST', body: form })
       .then(function (r) {
-        if (!r.ok) return r.json().then(function (d) { throw new Error(d.error || 'Server error (' + r.status + ')'); });
+        var ct = r.headers.get('content-type') || '';
+        if (!r.ok) {
+          if (ct.indexOf('application/json') !== -1) return r.json().then(function (d) { throw new Error(d.error || 'Server error (' + r.status + ')'); });
+          throw new Error('Server error (' + r.status + ')');
+        }
+        if (ct.indexOf('application/json') === -1) throw new Error('Unexpected response from server');
         return r.json();
       })
       .then(function (data) {
