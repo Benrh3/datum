@@ -499,3 +499,139 @@ INSERT INTO work_orders (id,maintenance_request_id,building_id,assigned_vendor_i
   (2,2,1,NULL,1,'Slow drain Suite 200 kitchenette — clear blockage','normal','completed','2026-06-14','2026-06-16'),
   (3,3,1,NULL,1,'Flickering lights Suite 700 open studio — inspect north bank fixtures','normal','open','2026-07-01',NULL),
   (4,5,1,NULL,1,'Pest control Suite 500 copy room — second mouse sighting','urgent','dispatched','2026-07-02',NULL);
+
+-- ══════════════════════════════════════════════════════════════════
+-- Fill remaining buildings so every property renders its core pages.
+-- IDs continue from current maxes; money in integer cents.
+-- ══════════════════════════════════════════════════════════════════
+
+-- Suites for buildings 2–8 (building 1 already has 8 suites, IDs 1–8)
+INSERT INTO suites (id,building_id,suite_number,floor,rentable_area_sqft,status) VALUES
+  (9, 2,'100',1,18000,'occupied'),(10,2,'200',2,22000,'occupied'),(11,2,'300',3,16000,'vacant'),
+  (12,3,'100',1,14000,'occupied'),(13,3,'200',2,19000,'occupied'),
+  (14,4,'100',1,28000,'occupied'),(15,4,'200',2,32000,'occupied'),(16,4,'300',3,24000,'occupied'),(17,4,'400',4,18000,'vacant'),
+  (18,5,'100',1,12000,'occupied'),(19,5,'200',2,15000,'occupied'),
+  (20,6,'100',1,10000,'occupied'),(21,6,'200',2,9500,'vacant'),
+  (22,7,'100',1,20000,'occupied'),(23,7,'200',2,18000,'occupied'),(24,7,'300',3,14000,'vacant'),
+  (25,8,'100',1,11000,'occupied'),(26,8,'200',2,13000,'occupied');
+
+-- New tenants for buildings 2–8
+INSERT INTO tenants (id,name,is_company,contact_name,contact_email,contact_phone) VALUES
+  (7, 'Canfor Timber Group',1,'Laura Fung','l.fung@canfortimber.ca','604-555-0701'),
+  (8, 'West Van Accounting LLP',1,'Greg Olsen','g.olsen@wvaccounting.ca','604-555-0801'),
+  (9, 'Salish Sea Ventures',1,'Kai Nakamura','k.nakamura@salishsea.ca','604-555-0901'),
+  (10,'Denman Street Physio',1,'Amy Wright','a.wright@denmanphysio.ca','604-555-1001'),
+  (11,'Strathcona Brewing Co',1,'Tyler Mah','t.mah@strathconabrewing.ca','604-555-1101'),
+  (12,'Ironside Engineering',1,'Rachel Osei','r.osei@ironsideeng.ca','604-555-1201'),
+  (13,'Cloud Nine Coworking',1,'Ben Harrington','b.harrington@cloudnine.ca','604-555-1301'),
+  (14,'Grouse Mountain Media',1,'Sophie Tremblay','s.tremblay@grousemedia.ca','604-555-1401'),
+  (15,'Kitsilano Legal Services',1,'Omar Hassan','o.hassan@kitslegal.ca','604-555-1501'),
+  (16,'Harbour Air Charters',1,'Diane Chu','d.chu@harbouraircharters.ca','604-555-1601');
+
+-- Leases + rent steps for buildings 2–8 (1 lease per occupied suite shown)
+INSERT INTO leases (id,suite_id,tenant_id,commencement_date,expiry_date,lease_type,base_rent_annual_cents) VALUES
+  (7, 9, 7, '2024-03-01','2029-02-28','nnn',54000000),
+  (8, 10,8, '2023-09-01','2028-08-31','modified_gross',61600000),
+  (9, 12,9, '2025-01-01','2029-12-31','nnn',39200000),
+  (10,13,10,'2024-06-01','2029-05-31','modified_gross',53200000),
+  (11,14,11,'2023-01-01','2027-12-31','nnn',84000000),
+  (12,15,12,'2024-07-01','2029-06-30','modified_gross',96000000),
+  (13,16,7, '2025-04-01','2030-03-31','nnn',67200000),
+  (14,18,13,'2024-11-01','2029-10-31','modified_gross',37800000),
+  (15,19,14,'2025-06-01','2030-05-31','nnn',42000000),
+  (16,20,15,'2023-08-01','2028-07-31','modified_gross',32000000),
+  (17,22,9, '2024-02-01','2029-01-31','nnn',62000000),
+  (18,23,16,'2025-03-01','2030-02-28','modified_gross',50400000),
+  (19,25,10,'2024-04-01','2029-03-31','nnn',34100000),
+  (20,26,14,'2023-11-01','2028-10-31','modified_gross',40300000);
+
+INSERT INTO rent_steps (id,lease_id,effective_date,annual_rent_cents) VALUES
+  (18,7, '2024-03-01',54000000),(19,7, '2025-03-01',55620000),(20,7, '2026-03-01',57289000),
+  (21,8, '2023-09-01',61600000),(22,8, '2024-09-01',63448000),(23,8, '2025-09-01',65351000),
+  (24,9, '2025-01-01',39200000),(25,9, '2026-01-01',40376000),
+  (26,10,'2024-06-01',53200000),(27,10,'2025-06-01',54796000),(28,10,'2026-06-01',56440000),
+  (29,11,'2023-01-01',84000000),(30,11,'2024-01-01',86520000),(31,11,'2025-01-01',89116000),(32,11,'2026-01-01',91789000),
+  (33,12,'2024-07-01',96000000),(34,12,'2025-07-01',98880000),
+  (35,13,'2025-04-01',67200000),(36,13,'2026-04-01',69216000),
+  (37,14,'2024-11-01',37800000),(38,14,'2025-11-01',38934000),
+  (39,15,'2025-06-01',42000000),(40,15,'2026-06-01',43260000),
+  (41,16,'2023-08-01',32000000),(42,16,'2024-08-01',32960000),(43,16,'2025-08-01',33949000),
+  (44,17,'2024-02-01',62000000),(45,17,'2025-02-01',63860000),(46,17,'2026-02-01',65776000),
+  (47,18,'2025-03-01',50400000),(48,18,'2026-03-01',51912000),
+  (49,19,'2024-04-01',34100000),(50,19,'2025-04-01',35123000),(51,19,'2026-04-01',36177000),
+  (52,20,'2023-11-01',40300000),(53,20,'2024-11-01',41509000),(54,20,'2025-11-01',42754000);
+
+-- Budgets for buildings 5, 6, 8 (buildings 2, 3, 4, 7 already have them)
+INSERT INTO budgets (building_id,gl_account_id,fiscal_year,period,amount_cents) VALUES
+  (5,11,2026,6,620000),(5,12,2026,6,980000),(5,21,2026,6,3400000),(5,23,2026,6,900000),
+  (6,11,2026,6,440000),(6,12,2026,6,680000),(6,21,2026,6,2200000),(6,23,2026,6,650000),
+  (8,11,2026,6,520000),(8,12,2026,6,850000),(8,21,2026,6,2800000),(8,23,2026,6,780000);
+
+-- Invoices + lines for buildings 3, 5, 6, 8 (buildings 2, 4 already have some)
+INSERT INTO invoices (id,vendor_id,building_id,invoice_number,invoice_date,total_cents,status) VALUES
+  (18,1,3,'GS-TAX-Q2','2026-06-01',4350000,'paid'),
+  (19,1,3,'GS-MGMT-06','2026-06-01',1050000,'paid'),
+  (20,1,5,'WP-TAX-Q2','2026-06-01',3500000,'paid'),
+  (21,1,5,'WP-MGMT-06','2026-06-01',870000,'paid'),
+  (22,1,6,'GL-TAX-Q2','2026-06-01',2300000,'paid'),
+  (23,1,6,'GL-MGMT-06','2026-06-01',620000,'paid'),
+  (24,1,8,'CC-TAX-Q2','2026-06-01',2950000,'paid'),
+  (25,1,8,'CC-MGMT-06','2026-06-01',740000,'paid');
+INSERT INTO invoice_lines (id,invoice_id,gl_account_id,description,amount_cents) VALUES
+  (20,18,21,'Property taxes Q2 — Granville Sq',4350000),
+  (21,19,23,'Management fee June — Granville Sq',1050000),
+  (22,20,21,'Property taxes Q2 — Waterfront Pl',3500000),
+  (23,21,23,'Management fee June — Waterfront Pl',870000),
+  (24,22,21,'Property taxes Q2 — Gastown Lofts',2300000),
+  (25,23,23,'Management fee June — Gastown Lofts',620000),
+  (26,24,21,'Property taxes Q2 — Cambie Commons',2950000),
+  (27,25,23,'Management fee June — Cambie Commons',740000);
+
+-- Link new paid invoices to their entity's operating account
+UPDATE invoices SET paid_from_bank_account_id = 2 WHERE id IN (18,19) AND paid_from_bank_account_id IS NULL;
+UPDATE invoices SET paid_from_bank_account_id = 2 WHERE id IN (20,21) AND paid_from_bank_account_id IS NULL;
+UPDATE invoices SET paid_from_bank_account_id = 2 WHERE id IN (22,23) AND paid_from_bank_account_id IS NULL;
+UPDATE invoices SET paid_from_bank_account_id = 3 WHERE id IN (24,25) AND paid_from_bank_account_id IS NULL;
+
+-- June 2026 rent charges for buildings 2–8
+INSERT INTO rent_charges (id,lease_id,building_id,period_year,period_month,charge_type,amount_cents,due_date,status) VALUES
+  (16,7, 2,2026,6,'base',4774083,'2026-06-01','paid'),
+  (17,8, 2,2026,6,'base',5445917,'2026-06-01','paid'),
+  (18,9, 3,2026,6,'base',3364667,'2026-06-01','paid'),
+  (19,10,3,2026,6,'base',4703333,'2026-06-01','paid'),
+  (20,11,4,2026,6,'base',7649083,'2026-06-01','paid'),
+  (21,12,4,2026,6,'base',8240000,'2026-06-01','paid'),
+  (22,13,4,2026,6,'base',5768000,'2026-06-01','paid'),
+  (23,14,5,2026,6,'base',3244500,'2026-06-01','paid'),
+  (24,15,5,2026,6,'base',3605000,'2026-06-01','paid'),
+  (25,16,6,2026,6,'base',2829083,'2026-06-01','paid'),
+  (26,17,7,2026,6,'base',5481333,'2026-06-01','paid'),
+  (27,18,7,2026,6,'base',4326000,'2026-06-01','paid'),
+  (28,19,8,2026,6,'base',3014750,'2026-06-01','paid'),
+  (29,20,8,2026,6,'base',3562833,'2026-06-01','paid');
+
+-- Tenant insurance COIs for new tenants
+INSERT INTO tenant_documents (id,tenant_id,doc_type,description,expiry_date,status) VALUES
+  (8, 7, 'insurance_coi','CGL $3M — landlord as additional insured','2027-02-28','approved'),
+  (9, 8, 'insurance_coi','CGL $2M — landlord as additional insured','2026-12-31','approved'),
+  (10,9, 'insurance_coi','CGL $5M — landlord as additional insured','2027-06-30','approved'),
+  (11,10,'insurance_coi','CGL $2M — landlord as additional insured','2026-10-15','approved'),
+  (12,11,'insurance_coi','CGL $5M — landlord as additional insured','2027-01-31','approved'),
+  (13,12,'insurance_coi','CGL $3M — landlord as additional insured','2026-11-30','approved'),
+  (14,13,'insurance_coi','CGL $2M — landlord as additional insured','2027-04-30','approved'),
+  (15,14,'insurance_coi','CGL $2M — landlord as additional insured','2026-09-15','approved'),
+  (16,15,'insurance_coi','CGL $3M — landlord as additional insured','2027-03-31','approved'),
+  (17,16,'insurance_coi','CGL $5M — landlord as additional insured','2026-08-31','approved');
+
+-- Tenant contacts for new tenants
+INSERT INTO tenant_contacts (id,tenant_id,name,role,email,phone,is_primary) VALUES
+  (10,7, 'Laura Fung','VP Operations','l.fung@canfortimber.ca','604-555-0701',1),
+  (11,8, 'Greg Olsen','Managing Partner','g.olsen@wvaccounting.ca','604-555-0801',1),
+  (12,9, 'Kai Nakamura','CEO','k.nakamura@salishsea.ca','604-555-0901',1),
+  (13,10,'Amy Wright','Clinic Director','a.wright@denmanphysio.ca','604-555-1001',1),
+  (14,11,'Tyler Mah','Founder','t.mah@strathconabrewing.ca','604-555-1101',1),
+  (15,12,'Rachel Osei','Principal Engineer','r.osei@ironsideeng.ca','604-555-1201',1),
+  (16,13,'Ben Harrington','General Manager','b.harrington@cloudnine.ca','604-555-1301',1),
+  (17,14,'Sophie Tremblay','Creative Director','s.tremblay@grousemedia.ca','604-555-1401',1),
+  (18,15,'Omar Hassan','Senior Partner','o.hassan@kitslegal.ca','604-555-1501',1),
+  (19,16,'Diane Chu','Operations Manager','d.chu@harbouraircharters.ca','604-555-1601',1);
