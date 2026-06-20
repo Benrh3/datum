@@ -215,6 +215,9 @@ function fmtDate(iso) {
       <!-- queue -->
       <div class="queue">
         <div class="queue-head"><span>Awaiting action</span><span><%= queue.length %></span></div>
+<% if (queue.length === 0) { %>
+        <div style="padding:24px var(--pad);color:var(--text-dim);font-size:13px;text-align:center">No invoices in the review queue for <%= building.name %>.</div>
+<% } %>
 <% for (const q of queue) { %>
         <a href="/ap-review?invoice=<%= q.id %>" class="qitem<%= q.id === selectedId ? ' sel' : '' %>">
           <div class="top"><span class="v"><%= q.vendor_name %></span><span class="amt"><%= fmt(q.total_cents) %></span></div>

@@ -217,9 +217,9 @@ const varPct = totalBudget ? pctVar(totalBudget, totalActual) : 0;
       </div>
     </section>
 <% } else if (entity) { %>
-    <div class="empty">No financial data for <%= entity.name %> in this period.</div>
+    <div style="padding:var(--pad)"><%- include('partials/empty-state', { message: 'No financial data for ' + entity.name + ' in this period.', sub: 'Budget rows for this entity\'s buildings have not been entered yet.' }) %></div>
 <% } else { %>
-    <div class="empty">Select a company above to generate the owner statement.</div>
+    <div style="padding:var(--pad)"><%- include('partials/empty-state', { message: 'Select a company above to generate the owner statement.' }) %></div>
 <% } %>
   </main>
 </div>

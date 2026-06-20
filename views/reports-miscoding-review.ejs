@@ -105,7 +105,7 @@ function fmt(cents) { return '$' + (Math.abs(cents) / 100).toLocaleString('en-US
         </table>
       </div>
 <% } else { %>
-      <div class="empty">No unusual coding found for this period.</div>
+      <%- include('partials/empty-state', { message: 'No unusual coding found for this period.', sub: 'All lines match their vendor\'s default GL code.' }) %>
 <% } %>
 
       <h2>Over-budget lines</h2>
@@ -130,7 +130,7 @@ function fmt(cents) { return '$' + (Math.abs(cents) / 100).toLocaleString('en-US
         </table>
       </div>
 <% } else { %>
-      <div class="empty">No accounts materially over budget for this period.</div>
+      <%- include('partials/empty-state', { message: 'No accounts materially over budget for this period.', sub: 'No account exceeds its budget by more than 10%.' }) %>
 <% } %>
     </section>
   </main>

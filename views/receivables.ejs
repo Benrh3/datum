@@ -65,7 +65,6 @@ function periodLabel(y, m) { var mn = ['Jan','Feb','Mar','Apr','May','Jun','Jul'
   .conf.hi{color:var(--mint);} .conf.lo{color:var(--clay);}
   tfoot td{padding:15px 16px;border-top:1px solid var(--hairline);font-weight:600;text-align:right;}
   tfoot td.l{text-align:left;}
-  .empty{color:var(--text-faint);padding:40px;text-align:center;}
   @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(79,227,161,.45);}70%{box-shadow:0 0 0 7px rgba(79,227,161,0);}100%{box-shadow:0 0 0 0 rgba(79,227,161,0);}}
   @media(prefers-reduced-motion:reduce){*{animation:none!important;}}
   :focus-visible{outline:2px solid var(--mint);outline-offset:2px;border-radius:4px;}
@@ -116,6 +115,7 @@ function periodLabel(y, m) { var mn = ['Jan','Feb','Mar','Apr','May','Jun','Jul'
 
     <section class="report">
 <% if (tab === 'charges') { %>
+<% if (charges.length > 0) { %>
       <div class="tbl-wrap">
         <table>
           <thead><tr><th class="l">Period</th><th class="l">Tenant</th><th class="l">Suite</th><th>Type</th><th>Charged</th><th>Paid</th><th>Status</th></tr></thead>
@@ -134,8 +134,12 @@ function periodLabel(y, m) { var mn = ['Jan','Feb','Mar','Apr','May','Jun','Jul'
           </tbody>
         </table>
       </div>
+<% } else { %>
+      <%- include('partials/empty-state', { message: 'No charges generated for this building.', sub: 'Generate charges from the rent schedule to populate this view.' }) %>
+<% } %>
 
 <% } else if (tab === 'receipts') { %>
+<% if (receipts.length > 0) { %>
       <div class="tbl-wrap">
         <table>
           <thead><tr><th class="l">Date</th><th class="l">Tenant</th><th>Amount</th><th class="l">Description</th><th>Type</th></tr></thead>
@@ -152,10 +156,13 @@ function periodLabel(y, m) { var mn = ['Jan','Feb','Mar','Apr','May','Jun','Jul'
           </tbody>
         </table>
       </div>
+<% } else { %>
+      <%- include('partials/empty-state', { message: 'No receipts recorded for this building.', sub: 'Receipts are created when bank deposits are matched to charges.' }) %>
+<% } %>
 
 <% } else if (tab === 'matching') { %>
 <% if (proposals.length === 0) { %>
-      <div class="empty">No pending matches. All deposits are reconciled.</div>
+      <%- include('partials/empty-state', { message: 'No pending matches for this building.', sub: 'All deposits are reconciled.' }) %>
 <% } else { %>
       <div class="tbl-wrap">
         <table>
@@ -183,7 +190,7 @@ function periodLabel(y, m) { var mn = ['Jan','Feb','Mar','Apr','May','Jun','Jul'
 
 <% } else if (tab === 'arrears') { %>
 <% if (arrears.length === 0) { %>
-      <div class="empty">No outstanding charges. All rents collected.</div>
+      <%- include('partials/empty-state', { message: 'No outstanding charges for this building.', sub: 'All rents have been collected.' }) %>
 <% } else { %>
       <div class="tbl-wrap">
         <table>

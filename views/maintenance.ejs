@@ -92,8 +92,6 @@ var urgentCount = requests.filter(function(r) { return r.priority === 'emergency
 
   .desc-cell{max-width:260px;overflow:hidden;text-overflow:ellipsis;color:var(--text-dim);}
 
-  .empty{color:var(--text-faint);padding:40px;text-align:center;}
-
   @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(79,227,161,.45);}70%{box-shadow:0 0 0 7px rgba(79,227,161,0);}100%{box-shadow:0 0 0 0 rgba(79,227,161,0);}}
   @media(prefers-reduced-motion:reduce){*{animation:none!important;}}
   :focus-visible{outline:2px solid var(--mint);outline-offset:2px;border-radius:4px;}
@@ -152,7 +150,7 @@ var urgentCount = requests.filter(function(r) { return r.priority === 'emergency
     <section class="report">
 <% if (tab === 'requests') { %>
   <% if (requests.length === 0) { %>
-      <div class="empty">No maintenance requests found.</div>
+      <%- include('partials/empty-state', { message: 'No maintenance requests for ' + building.name + '.', sub: 'Tenant-submitted requests will appear here.' }) %>
   <% } else { %>
       <div class="tbl-wrap">
         <table>
@@ -186,7 +184,7 @@ var urgentCount = requests.filter(function(r) { return r.priority === 'emergency
 
 <% } else if (tab === 'work-orders') { %>
   <% if (workOrders.length === 0) { %>
-      <div class="empty">No work orders found.</div>
+      <%- include('partials/empty-state', { message: 'No work orders for ' + building.name + '.', sub: 'Work orders are created when maintenance requests are assigned to a vendor.' }) %>
   <% } else { %>
       <div class="tbl-wrap">
         <table>

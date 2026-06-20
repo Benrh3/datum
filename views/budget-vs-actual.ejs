@@ -297,6 +297,7 @@ const topFav = sorted.filter(r => r.actual_cents < r.budget_cents).slice(0, 2);
       </div>
     </div>
 
+<% if (grouped.length > 0) { %>
     <!-- hero -->
     <section class="hero">
       <div class="lbl">Net variance to budget &middot; Q<%= quarter %> <%= year %></div>
@@ -398,6 +399,11 @@ const topFav = sorted.filter(r => r.actual_cents < r.budget_cents).slice(0, 2);
         Switch to <strong style="color:var(--text-dim)">Plain view</strong> to hide GL codes and accrual detail for a board-level read.
       </p>
     </section>
+<% } else { %>
+    <div style="padding:var(--pad)">
+      <%- include('partials/empty-state', { message: 'No budget data for ' + building.name + ' in this period.', sub: 'Budget rows for this building and period have not been entered yet.' }) %>
+    </div>
+<% } %>
   </main>
 </div>
 

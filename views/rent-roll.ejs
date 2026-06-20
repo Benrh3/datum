@@ -253,6 +253,7 @@ const avgRate = leasedArea > 0 ? totalRent / leasedArea : 0;
       </div>
     </div>
 
+<% if (rows.length > 0) { %>
     <!-- summary strip -->
     <section class="summary">
       <div><span>Active leases</span><b><%= rows.length %></b></div>
@@ -322,6 +323,11 @@ const avgRate = leasedArea > 0 ? totalRent / leasedArea : 0;
         Switch to <strong style="color:var(--text-dim)">Plain view</strong> to hide lease type and commencement date.
       </p>
     </section>
+<% } else { %>
+    <div style="padding:var(--pad)">
+      <%- include('partials/empty-state', { message: 'No active leases for ' + building.name + '.', sub: 'Leases that have commenced and not yet expired will appear here.' }) %>
+    </div>
+<% } %>
   </main>
 </div>
 
