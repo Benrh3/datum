@@ -1,0 +1,14 @@
+<link rel="stylesheet" href="/mobile.css">
+<div class="nav-backdrop" id="nav-backdrop"></div>
+<script>
+(function(){
+  var rail=document.querySelector('.rail'),bd=document.getElementById('nav-backdrop'),
+      btn=document.getElementById('hamburger');
+  if(!rail||!bd||!btn)return;
+  function open(){rail.classList.add('open');bd.classList.add('open');}
+  function close(){rail.classList.remove('open');bd.classList.remove('open');}
+  btn.addEventListener('click',function(e){e.stopPropagation();rail.classList.contains('open')?close():open();});
+  bd.addEventListener('click',close);
+  rail.addEventListener('click',function(e){if(e.target.closest('a'))close();});
+})();
+</script>

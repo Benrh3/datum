@@ -205,19 +205,7 @@ const openArrears = arrears
   @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
   :focus-visible { outline: 2px solid var(--mint); outline-offset: 2px; border-radius: 4px; }
 
-  @media (max-width: 960px) {
-    .columns { grid-template-columns: 1fr; }
-    .col-left { border-right: none; border-bottom: 1px solid var(--hairline); }
-  }
-  @media (max-width: 860px) {
-    .app { grid-template-columns: 1fr; }
-    .rail { flex-direction: row; align-items: center; overflow-x: auto; gap: 14px;
-            border-right: none; border-bottom: 1px solid var(--hairline); padding: 14px 16px; }
-    .rail nav { flex-direction: row; }
-    .nav-label { display: none; }
-    nav a span.t { display: none; }
-    .summary { flex-wrap: wrap; gap: 18px 30px; }
-  }
+
 </style>
 </head>
 <body>
@@ -252,6 +240,7 @@ const openArrears = arrears
   <!-- main -->
   <main class="main">
     <div class="topbar">
+      <button class="hamburger" id="hamburger" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 12h18M3 6h18M3 18h18"/></svg></button>
       <div>
         <div class="crumb"><b>Portfolio</b> &nbsp;/&nbsp; Tenant profile</div>
         <h1><%= tenant.name %></h1>
@@ -267,7 +256,7 @@ const openArrears = arrears
     </section>
 
     <!-- two-column layout -->
-    <div class="columns">
+    <div class="columns profile-grid">
 
       <!-- LEFT column -->
       <div class="col-left">
@@ -494,5 +483,6 @@ const openArrears = arrears
   });
 })();
 </script>
+<%- include('partials/mobile-nav') %>
 </body>
 </html>

@@ -96,13 +96,7 @@ var urgentCount = requests.filter(function(r) { return r.priority === 'emergency
   @media(prefers-reduced-motion:reduce){*{animation:none!important;}}
   :focus-visible{outline:2px solid var(--mint);outline-offset:2px;border-radius:4px;}
 
-  @media(max-width:860px){
-    .app{grid-template-columns:1fr;}
-    .rail{flex-direction:row;align-items:center;overflow-x:auto;gap:14px;border-right:none;
-          border-bottom:1px solid var(--hairline);padding:14px 16px;}
-    .rail nav{flex-direction:row;}.nav-label{display:none;}nav a span.t{display:none;}
-    .tabs{overflow-x:auto;}.summary{flex-wrap:wrap;gap:18px 30px;}
-  }
+
 </style>
 </head>
 <body>
@@ -129,6 +123,7 @@ var urgentCount = requests.filter(function(r) { return r.priority === 'emergency
 
   <main class="main">
     <div class="topbar">
+      <button class="hamburger" id="hamburger" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 12h18M3 6h18M3 18h18"/></svg></button>
       <div>
         <div class="crumb"><b>Operations</b> &nbsp;/&nbsp; Maintenance</div>
         <h1>Maintenance</h1>
@@ -227,5 +222,6 @@ document.getElementById('bldg-pick').addEventListener('change', function() {
   window.location.href = '/maintenance?building=' + this.value;
 });
 </script>
+<%- include('partials/mobile-nav') %>
 </body>
 </html>

@@ -68,7 +68,7 @@ function periodLabel(y, m) { var mn = ['Jan','Feb','Mar','Apr','May','Jun','Jul'
   @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(79,227,161,.45);}70%{box-shadow:0 0 0 7px rgba(79,227,161,0);}100%{box-shadow:0 0 0 0 rgba(79,227,161,0);}}
   @media(prefers-reduced-motion:reduce){*{animation:none!important;}}
   :focus-visible{outline:2px solid var(--mint);outline-offset:2px;border-radius:4px;}
-  @media(max-width:860px){.app{grid-template-columns:1fr;}.rail{flex-direction:row;align-items:center;overflow-x:auto;gap:14px;border-right:none;border-bottom:1px solid var(--hairline);padding:14px 16px;}.rail nav{flex-direction:row;}.nav-label{display:none;}nav a span.t{display:none;}.tabs{overflow-x:auto;}.summary{flex-wrap:wrap;gap:18px 30px;}}
+
 </style>
 </head>
 <body>
@@ -93,6 +93,7 @@ function periodLabel(y, m) { var mn = ['Jan','Feb','Mar','Apr','May','Jun','Jul'
 
   <main class="main">
     <div class="topbar">
+      <button class="hamburger" id="hamburger" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 12h18M3 6h18M3 18h18"/></svg></button>
       <div>
         <div class="crumb"><b>Accounting</b> &nbsp;/&nbsp; Receivables</div>
         <h1>Receivables</h1>
@@ -239,5 +240,6 @@ function rejectMatch(id) {
   }).then(function(){window.location.reload()});
 }
 </script>
+<%- include('partials/mobile-nav') %>
 </body>
 </html>
