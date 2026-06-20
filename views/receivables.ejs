@@ -1,0 +1,236 @@
+<%
+function fmt(cents) { return '$' + (Math.abs(cents) / 100).toLocaleString('en-US', { maximumFractionDigits: 0 }); }
+function fmtDate(iso) { var p = iso.split('T')[0].split('-'); var m = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return m[+p[1]-1]+' '+Number(p[2])+', '+p[0]; }
+function periodLabel(y, m) { var mn = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return mn[m-1]+' '+y; }
+%>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Receivables — <%= building.name %></title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0C0D0F;--surface:#141619;--surface-2:#1A1D22;--hairline:#24272C;--text:#E7E9EC;--text-dim:#969CA4;--text-faint:#5F646B;--mint:#4FE3A1;--clay:#DB9A63;--sans:"General Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;--mono:"JetBrains Mono",ui-monospace,SFMono-Regular,"SF Mono",monospace;--r:10px;--r-sm:6px;--pad:28px;}
+  *{box-sizing:border-box;}html,body{margin:0;}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;}
+  .num{font-family:var(--mono);font-variant-numeric:tabular-nums;}
+  .app{display:grid;grid-template-columns:232px 1fr;min-height:100vh;}
+  .rail{border-right:1px solid var(--hairline);padding:22px 16px;display:flex;flex-direction:column;gap:26px;}
+  .brand{display:flex;align-items:center;gap:10px;padding:4px 8px;}
+  .brand .dot{width:9px;height:9px;border-radius:50%;background:var(--mint);animation:pulse 2.6s ease-out infinite;}
+  nav{display:flex;flex-direction:column;gap:2px;}
+  nav a{display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:var(--r-sm);color:var(--text-dim);text-decoration:none;font-weight:500;border-left:2px solid transparent;}
+  nav a:hover{background:var(--surface);color:var(--text);}
+  nav a.active{color:var(--text);background:var(--surface);border-left-color:var(--mint);}
+  nav a svg{width:16px;height:16px;stroke-width:1.6;opacity:.9;}
+  .nav-label{font-size:11px;letter-spacing:1.4px;text-transform:uppercase;color:var(--text-faint);padding:0 12px;margin-bottom:4px;}
+  .bldg-pick{width:100%;background:transparent;border:1px solid transparent;border-radius:var(--r-sm);color:var(--text);font-family:var(--sans);font-weight:600;font-size:14px;letter-spacing:.2px;padding:4px 22px 4px 0;appearance:none;cursor:pointer;outline:none;background-image:url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%235F646B' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 2px center;}
+  .bldg-pick:hover,.bldg-pick:focus{border-color:var(--hairline);}
+  .bldg-pick option{background:var(--surface);color:var(--text);}
+  .main{min-width:0;}
+  .topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px var(--pad);border-bottom:1px solid var(--hairline);}
+  .crumb{color:var(--text-faint);font-size:12.5px;}.crumb b{color:var(--text-dim);font-weight:500;}
+  .topbar h1{font-size:19px;font-weight:600;margin:2px 0 0;letter-spacing:.2px;}
+  .summary{display:flex;gap:30px;padding:24px var(--pad);border-bottom:1px solid var(--hairline);}
+  .summary div span{display:block;color:var(--text-faint);font-size:12px;margin-bottom:3px;}
+  .summary div b{font-family:var(--mono);font-weight:500;font-size:16px;}
+  .tabs{display:flex;gap:0;border-bottom:1px solid var(--hairline);padding:0 var(--pad);}
+  .tab{padding:12px 18px;font-size:13px;font-weight:500;color:var(--text-dim);text-decoration:none;border-bottom:2px solid transparent;margin-bottom:-1px;}
+  .tab:hover{color:var(--text);}
+  .tab.active{color:var(--text);border-bottom-color:var(--mint);}
+  .tab .badge{font-family:var(--mono);font-size:11px;background:var(--surface-2);padding:2px 6px;border-radius:var(--r-sm);margin-left:6px;}
+  .tab .badge.warn{background:rgba(219,154,99,.10);color:var(--clay);}
+  .report{padding:22px var(--pad) 40px;}
+  .tbl-wrap{overflow-x:auto;border:1px solid var(--hairline);border-radius:var(--r);background:var(--surface);}
+  table{width:100%;border-collapse:collapse;min-width:640px;}
+  thead th{text-align:right;font-weight:500;color:var(--text-faint);font-size:11px;letter-spacing:.8px;text-transform:uppercase;padding:13px 16px;border-bottom:1px solid var(--hairline);white-space:nowrap;}
+  thead th.l{text-align:left;}
+  tbody td{padding:14px 16px;border-bottom:1px solid var(--hairline);text-align:right;white-space:nowrap;}
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr:hover{background:var(--surface-2);}
+  td.l{text-align:left;}
+  .chip{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:500;padding:3px 8px;border-radius:var(--r-sm);letter-spacing:.2px;}
+  .chip.ok{color:var(--mint);background:rgba(79,227,161,.10);}
+  .chip.block{color:var(--clay);background:rgba(219,154,99,.10);}
+  .chip.pend{color:var(--text-dim);background:var(--surface-2);}
+  .btn{display:inline-flex;align-items:center;gap:6px;font:inherit;font-weight:500;font-size:12px;border-radius:var(--r-sm);padding:6px 12px;border:1px solid var(--hairline);background:var(--surface);color:var(--text);cursor:pointer;text-decoration:none;}
+  .btn:hover{background:var(--surface-2);}
+  .btn-sm{font-size:11px;padding:4px 8px;}
+  .btn-mint{background:var(--mint);border-color:var(--mint);color:#08130D;}
+  .conf{font-family:var(--mono);font-size:12px;}
+  .conf.hi{color:var(--mint);} .conf.lo{color:var(--clay);}
+  tfoot td{padding:15px 16px;border-top:1px solid var(--hairline);font-weight:600;text-align:right;}
+  tfoot td.l{text-align:left;}
+  .empty{color:var(--text-faint);padding:40px;text-align:center;}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(79,227,161,.45);}70%{box-shadow:0 0 0 7px rgba(79,227,161,0);}100%{box-shadow:0 0 0 0 rgba(79,227,161,0);}}
+  @media(prefers-reduced-motion:reduce){*{animation:none!important;}}
+  :focus-visible{outline:2px solid var(--mint);outline-offset:2px;border-radius:4px;}
+  @media(max-width:860px){.app{grid-template-columns:1fr;}.rail{flex-direction:row;align-items:center;overflow-x:auto;gap:14px;border-right:none;border-bottom:1px solid var(--hairline);padding:14px 16px;}.rail nav{flex-direction:row;}.nav-label{display:none;}nav a span.t{display:none;}.tabs{overflow-x:auto;}.summary{flex-wrap:wrap;gap:18px 30px;}}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="rail">
+    <div class="brand"><div class="dot" aria-hidden="true"></div><div>
+      <select class="bldg-pick" id="bldg-pick"><% for (const b of allBuildings) { %><option value="<%= b.id %>"<%= b.id === buildingId ? ' selected' : '' %>><%= b.name %></option><% } %></select>
+    </div></div>
+    <nav aria-label="Sections">
+      <div class="nav-label">Portfolio</div>
+      <a href="/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span class="t">Overview</span></a>
+      <a href="/rent-roll?building=<%= buildingId %>"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 9h2m-2 4h2m4-4h2m-2 4h2"/></svg><span class="t">Rent roll</span></a>
+      <div class="nav-label">Accounting</div>
+      <a href="/budget-vs-actual?building=<%= buildingId %>"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 3v18h18M8 14l3-3 3 3 5-6"/></svg><span class="t">Budget vs actual</span></a>
+      <a href="/ap-review?building=<%= buildingId %>"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 5h16v14H4zM4 9h16M9 13h6"/></svg><span class="t">Accounts payable</span></a>
+      <a href="/receivables?building=<%= buildingId %>" class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2v20M2 12h20M6 6l12 12M18 6L6 18"/></svg><span class="t">Receivables</span></a>
+      <div class="nav-label">Reports</div>
+      <a href="/reports/owner-statement"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg><span class="t">Owner statement</span></a>
+      <a href="/reports/miscoding-review"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 9v4m0 4h.01M10.3 3.9L2 18a2 2 0 001.7 3h16.6a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/></svg><span class="t">Miscoding review</span></a>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <div>
+        <div class="crumb"><b>Accounting</b> &nbsp;/&nbsp; Receivables</div>
+        <h1>Receivables</h1>
+      </div>
+    </div>
+
+    <section class="summary">
+      <div><span>Open charges</span><b><%= arrears.length %></b></div>
+      <div><span>Arrears</span><b style="color:<%= totalArrears > 0 ? 'var(--clay)' : 'var(--text)' %>"><%= fmt(totalArrears) %></b></div>
+      <div><span>Pending matches</span><b><%= proposals.length %></b></div>
+      <div><span>Receipts (all time)</span><b><%= receipts.length %></b></div>
+    </section>
+
+    <div class="tabs">
+      <a href="?building=<%= buildingId %>&tab=charges" class="tab<%= tab==='charges'?' active':'' %>">Charges</a>
+      <a href="?building=<%= buildingId %>&tab=receipts" class="tab<%= tab==='receipts'?' active':'' %>">Receipts</a>
+      <a href="?building=<%= buildingId %>&tab=matching" class="tab<%= tab==='matching'?' active':'' %>">Matching<% if (proposals.length) { %><span class="badge warn"><%= proposals.length %></span><% } %></a>
+      <a href="?building=<%= buildingId %>&tab=arrears" class="tab<%= tab==='arrears'?' active':'' %>">Arrears<% if (arrears.length) { %><span class="badge warn"><%= arrears.length %></span><% } %></a>
+    </div>
+
+    <section class="report">
+<% if (tab === 'charges') { %>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th class="l">Period</th><th class="l">Tenant</th><th class="l">Suite</th><th>Type</th><th>Charged</th><th>Paid</th><th>Status</th></tr></thead>
+          <tbody>
+<% for (const c of charges) { %>
+            <tr>
+              <td class="l"><%= periodLabel(c.period_year, c.period_month) %></td>
+              <td class="l" style="font-weight:500"><%= c.tenant_name %></td>
+              <td class="l"><%= c.suite_number %></td>
+              <td class="num" style="text-transform:uppercase;font-size:11px;letter-spacing:.5px;color:var(--text-faint)"><%= c.charge_type %></td>
+              <td class="num"><%= fmt(c.amount_cents) %></td>
+              <td class="num"><%= fmt(c.paid_cents) %></td>
+              <td><span class="chip <%= c.status==='paid'?'ok':c.status==='partial'?'block':'pend' %>"><%= c.status %></span></td>
+            </tr>
+<% } %>
+          </tbody>
+        </table>
+      </div>
+
+<% } else if (tab === 'receipts') { %>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th class="l">Date</th><th class="l">Tenant</th><th>Amount</th><th class="l">Description</th><th>Type</th></tr></thead>
+          <tbody>
+<% for (const r of receipts) { %>
+            <tr>
+              <td class="l num"><%= fmtDate(r.receipt_date) %></td>
+              <td class="l" style="font-weight:500"><%= r.tenant_name || '—' %></td>
+              <td class="num"><%= fmt(r.amount_cents) %></td>
+              <td class="l" style="color:var(--text-dim);max-width:250px;overflow:hidden;text-overflow:ellipsis"><%= r.description %></td>
+              <td style="text-transform:uppercase;font-size:11px;letter-spacing:.5px;color:var(--text-faint)"><%= r.receipt_type %></td>
+            </tr>
+<% } %>
+          </tbody>
+        </table>
+      </div>
+
+<% } else if (tab === 'matching') { %>
+<% if (proposals.length === 0) { %>
+      <div class="empty">No pending matches. All deposits are reconciled.</div>
+<% } else { %>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th class="l">Deposit</th><th>Amount</th><th class="l">Proposed match</th><th>Charge</th><th>Confidence</th><th></th></tr></thead>
+          <tbody>
+<% for (const p of proposals) { %>
+            <tr>
+              <td class="l"><span style="font-weight:500"><%= fmtDate(p.transaction_date) %></span><div style="color:var(--text-faint);font-size:12px;margin-top:2px"><%= p.deposit_desc %></div></td>
+              <td class="num"><%= fmt(p.deposit_amount) %></td>
+              <td class="l"><span style="font-weight:500"><%= p.tenant_name || '—' %></span> <span style="color:var(--text-faint)"><%= p.suite_number ? '· ' + p.suite_number : '' %></span><div style="color:var(--text-faint);font-size:12px;margin-top:2px"><%= p.match_reason %></div></td>
+              <td class="num"><%= fmt(p.charge_amount) %></td>
+              <td class="num"><span class="conf <%= p.confidence >= 70 ? 'hi' : 'lo' %>"><%= p.confidence %>%</span></td>
+              <td>
+                <div style="display:flex;gap:6px">
+                  <button class="btn btn-sm btn-mint" onclick="acceptMatch(<%= p.id %>)">Accept</button>
+                  <button class="btn btn-sm" onclick="rejectMatch(<%= p.id %>)">Reject</button>
+                </div>
+              </td>
+            </tr>
+<% } %>
+          </tbody>
+        </table>
+      </div>
+<% } %>
+
+<% } else if (tab === 'arrears') { %>
+<% if (arrears.length === 0) { %>
+      <div class="empty">No outstanding charges. All rents collected.</div>
+<% } else { %>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th class="l">Period</th><th class="l">Tenant</th><th class="l">Suite</th><th>Type</th><th>Charged</th><th>Paid</th><th>Outstanding</th><th>Status</th></tr></thead>
+          <tbody>
+<% for (const c of arrears) { const outstanding = c.amount_cents - c.paid_cents; %>
+            <tr>
+              <td class="l"><%= periodLabel(c.period_year, c.period_month) %></td>
+              <td class="l" style="font-weight:500"><%= c.tenant_name %></td>
+              <td class="l"><%= c.suite_number %></td>
+              <td class="num" style="text-transform:uppercase;font-size:11px;letter-spacing:.5px;color:var(--text-faint)"><%= c.charge_type %></td>
+              <td class="num"><%= fmt(c.amount_cents) %></td>
+              <td class="num"><%= fmt(c.paid_cents) %></td>
+              <td class="num" style="color:var(--clay)"><%= fmt(outstanding) %></td>
+              <td><span class="chip <%= c.status==='partial'?'block':'pend' %>"><%= c.status %></span></td>
+            </tr>
+<% } %>
+          </tbody>
+          <tfoot><tr><td class="l" colspan="6">Total outstanding</td><td class="num" style="color:var(--clay)"><%= fmt(totalArrears) %></td><td></td></tr></tfoot>
+        </table>
+      </div>
+<% } %>
+<% } %>
+    </section>
+  </main>
+</div>
+<script>
+(function () {
+  document.getElementById('bldg-pick').addEventListener('change', function () {
+    window.location.href = '/receivables?building=' + this.value;
+  });
+})();
+var origin = window.location.origin;
+function acceptMatch(id) {
+  fetch(origin + '/api/receivables/accept-match', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ proposal_id: id })
+  }).then(function(r){return r.json()}).then(function(d){
+    if (d.ok) window.location.reload(); else alert(d.error);
+  });
+}
+function rejectMatch(id) {
+  fetch(origin + '/api/receivables/reject-match', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ proposal_id: id })
+  }).then(function(){window.location.reload()});
+}
+</script>
+</body>
+</html>

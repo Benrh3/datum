@@ -371,3 +371,83 @@ INSERT INTO bank_accounts (id,entity_id,building_id,type,name,last4) VALUES
 UPDATE invoices SET paid_from_bank_account_id = 1 WHERE building_id = 1 AND status = 'paid';
 UPDATE invoices SET paid_from_bank_account_id = 2 WHERE building_id IN (2,3,4,5,6,7) AND status = 'paid';
 UPDATE invoices SET paid_from_bank_account_id = 3 WHERE building_id = 8 AND status = 'paid';
+
+-- ══════════════════════════════════════════════════════════════════
+-- Rent recording: charges, deposits, receipts, matching
+-- Monthly rents from current escalation steps (as of June 2026):
+--   Lease 1 Blackwood:   $38,937,600/yr → $3,244,800/mo
+--   Lease 2 Cascade:     $50,058,000/yr → $4,171,500/mo
+--   Lease 3 Pacific Rim: $52,621,000/yr → $4,385,083/mo
+--   Lease 4 Northshore:  $50,470,000/yr → $4,205,833/mo
+--   Lease 5 Tidewater:   $34,031,000/yr → $2,835,917/mo
+--   Lease 6 Apex:        $57,739,000/yr → $4,811,583/mo
+-- ══════════════════════════════════════════════════════════════════
+
+-- June 2026 rent charges (generated from schedule)
+INSERT INTO rent_charges (id,lease_id,building_id,period_year,period_month,charge_type,amount_cents,due_date,status) VALUES
+  (1, 1,1,2026,6,'base',3244800,'2026-06-01','paid'),
+  (2, 2,1,2026,6,'base',4171500,'2026-06-01','paid'),
+  (3, 3,1,2026,6,'base',4385083,'2026-06-01','paid'),
+  (4, 4,1,2026,6,'base',4205833,'2026-06-01','paid'),
+  (5, 5,1,2026,6,'base',2835917,'2026-06-01','paid'),
+  (6, 6,1,2026,6,'base',4811583,'2026-06-01','paid'),
+  (7, 1,1,2026,6,'cam', 520000,'2026-06-01','paid'),
+  (8, 3,1,2026,6,'cam', 672000,'2026-06-01','paid');
+
+-- July 2026 charges (some open, some partial — shows the AR aging story)
+INSERT INTO rent_charges (id,lease_id,building_id,period_year,period_month,charge_type,amount_cents,due_date,status) VALUES
+  (9,  1,1,2026,7,'base',3244800,'2026-07-01','paid'),
+  (10, 2,1,2026,7,'base',4171500,'2026-07-01','paid'),
+  (11, 3,1,2026,7,'base',4385083,'2026-07-01','open'),
+  (12, 4,1,2026,7,'base',4205833,'2026-07-01','paid'),
+  (13, 5,1,2026,7,'base',2835917,'2026-07-01','partial'),
+  (14, 6,1,2026,7,'base',4811583,'2026-07-01','open'),
+  (15, 1,1,2026,7,'cam', 520000,'2026-07-01','paid');
+
+-- Bank deposits (trust account 4 for Cordova Exchange)
+INSERT INTO bank_transactions (id,bank_account_id,transaction_date,amount_cents,description,reference,reconciled) VALUES
+  (1, 4,'2026-06-01',3764800,'DEPOSIT - BLACKWOOD & ASSOC','ACH-BW-0601',1),
+  (2, 4,'2026-06-01',4171500,'DEPOSIT - CASCADE DIGITAL','ACH-CD-0601',1),
+  (3, 4,'2026-06-02',5057083,'DEPOSIT - PACIFIC RIM CONS','CHQ-PR-4422',1),
+  (4, 4,'2026-06-01',4205833,'DEPOSIT - NORTHSHORE WEALTH','ACH-NW-0601',1),
+  (5, 4,'2026-06-01',2835917,'DEPOSIT - TIDEWATER ARCH','ACH-TA-0601',1),
+  (6, 4,'2026-06-03',4811583,'DEPOSIT - APEX VENTURES','CHQ-AV-8810',1),
+  (7, 4,'2026-07-01',3764800,'DEPOSIT - BLACKWOOD & ASSOC','ACH-BW-0701',1),
+  (8, 4,'2026-07-01',4171500,'DEPOSIT - CASCADE DIGITAL','ACH-CD-0701',1),
+  (9, 4,'2026-07-02',4205833,'DEPOSIT - NORTHSHORE WEALTH','ACH-NW-0701',1),
+  (10,4,'2026-07-03',1500000,'DEPOSIT - TIDEWATER ARCH','ACH-TA-0703',0),
+  (11,4,'2026-07-05',4811583,'DEPOSIT UNKNOWN REF','DEP-0705',0);
+
+-- Receipts for June (fully matched and applied)
+INSERT INTO receipts (id,lease_id,building_id,bank_account_id,receipt_date,amount_cents,description,receipt_type) VALUES
+  (1, 1,1,4,'2026-06-01',3764800,'June rent + CAM — Blackwood','rent'),
+  (2, 2,1,4,'2026-06-01',4171500,'June rent — Cascade Digital','rent'),
+  (3, 3,1,4,'2026-06-02',5057083,'June rent + CAM — Pacific Rim','rent'),
+  (4, 4,1,4,'2026-06-01',4205833,'June rent — Northshore Wealth','rent'),
+  (5, 5,1,4,'2026-06-01',2835917,'June rent — Tidewater','rent'),
+  (6, 6,1,4,'2026-06-03',4811583,'June rent — Apex Ventures','rent');
+
+-- Payment applications for June
+INSERT INTO payment_applications (receipt_id,rent_charge_id,amount_cents) VALUES
+  (1,1,3244800),(1,7,520000),
+  (2,2,4171500),
+  (3,3,4385083),(3,8,672000),
+  (4,4,4205833),
+  (5,5,2835917),
+  (6,6,4811583);
+
+-- July receipts (some applied, two unmatched deposits remain)
+INSERT INTO receipts (id,lease_id,building_id,bank_account_id,receipt_date,amount_cents,description,receipt_type) VALUES
+  (7, 1,1,4,'2026-07-01',3764800,'July rent + CAM — Blackwood','rent'),
+  (8, 2,1,4,'2026-07-01',4171500,'July rent — Cascade Digital','rent'),
+  (9, 4,1,4,'2026-07-02',4205833,'July rent — Northshore Wealth','rent');
+
+INSERT INTO payment_applications (receipt_id,rent_charge_id,amount_cents) VALUES
+  (7,9,3244800),(7,15,520000),
+  (8,10,4171500),
+  (9,12,4205833);
+
+-- Match proposals for unmatched July deposits
+INSERT INTO match_proposals (bank_transaction_id,rent_charge_id,lease_id,proposed_amount_cents,confidence,match_reason,status) VALUES
+  (10,13,5,1500000,65,'Partial match: $15,000 of $28,359 due from Tidewater — amount mismatch','proposed'),
+  (11,14,6,4811583,40,'Amount matches Apex July rent but reference missing','proposed');

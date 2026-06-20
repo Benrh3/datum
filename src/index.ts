@@ -6,6 +6,7 @@ import { dirname, join } from 'node:path';
 import { db, migrate } from './db.js';
 import { reports } from './routes/reports.js';
 import { ap } from './routes/ap.js';
+import { receivables } from './routes/receivables.js';
 
 migrate();
 
@@ -353,6 +354,55 @@ app.get('/ap-review', (req, res) => {
   res.render('ap-review', { building, buildingId, queue, selectedId, invoice, lines, gates, approvals, importInfo, rules, unusualLines, reclassHistory, glAccounts });
 });
 
+app.get('/receivables', (req, res) => {
+  const buildingId = Number(req.query.building ?? 1);
+  const tab = String(req.query.tab ?? 'charges');
+
+  const building = db.prepare(
+    'SELECT b.name, e.name AS entity_name FROM buildings b JOIN entities e ON e.id = b.entity_id WHERE b.id = ?'
+  ).get(buildingId) as { name: string; entity_name: string } | undefined;
+  if (!building) return res.status(404).send('Building not found');
+
+  const charges = db.prepare(`
+    SELECT rc.*, t.name AS tenant_name, s.suite_number,
+      COALESCE((SELECT SUM(pa.amount_cents) FROM payment_applications pa WHERE pa.rent_charge_id = rc.id), 0) AS paid_cents
+    FROM rent_charges rc
+    JOIN leases l ON l.id = rc.lease_id
+    JOIN tenants t ON t.id = l.tenant_id
+    JOIN suites s ON s.id = l.suite_id
+    WHERE rc.building_id = ?
+    ORDER BY rc.period_year DESC, rc.period_month DESC, t.name
+  `).all(buildingId) as any[];
+
+  const receipts = db.prepare(`
+    SELECT r.*, t.name AS tenant_name
+    FROM receipts r
+    LEFT JOIN tenants t ON t.id = (SELECT tenant_id FROM leases WHERE id = r.lease_id)
+    WHERE r.building_id = ?
+    ORDER BY r.receipt_date DESC
+  `).all(buildingId) as any[];
+
+  const proposals = db.prepare(`
+    SELECT mp.*, bt.transaction_date, bt.amount_cents AS deposit_amount, bt.description AS deposit_desc,
+           rc.charge_type, rc.amount_cents AS charge_amount, rc.period_year, rc.period_month,
+           t.name AS tenant_name, s.suite_number
+    FROM match_proposals mp
+    JOIN bank_transactions bt ON bt.id = mp.bank_transaction_id
+    LEFT JOIN rent_charges rc ON rc.id = mp.rent_charge_id
+    LEFT JOIN leases l ON l.id = mp.lease_id
+    LEFT JOIN tenants t ON t.id = l.tenant_id
+    LEFT JOIN suites s ON s.id = l.suite_id
+    WHERE mp.status = 'proposed'
+      AND rc.building_id = ?
+    ORDER BY mp.confidence DESC
+  `).all(buildingId) as any[];
+
+  const arrears = charges.filter((c: any) => c.status !== 'paid' && c.status !== 'void');
+  const totalArrears = arrears.reduce((s: number, c: any) => s + (c.amount_cents - c.paid_cents), 0);
+
+  res.render('receivables', { building, buildingId, tab, charges, receipts, proposals, arrears, totalArrears });
+});
+
 app.get('/reports/miscoding-review', (req, res) => {
   const buildingId = Number(req.query.building ?? 0);
   const year = Number(req.query.year ?? 2026);
@@ -445,6 +495,7 @@ app.get('/reports/owner-statement', (req, res) => {
 // One router per domain. Add: leasing, vendors, capital, investor.
 app.use('/api', reports);
 app.use('/api/ap', ap);
+app.use('/api/receivables', receivables);
 
 const port = Number(process.env.PORT ?? 4010);
 app.listen(port, () => console.log(`[commercial-pm] http://localhost:${port}`));
