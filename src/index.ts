@@ -22,7 +22,112 @@ app.use((_req, res, next) => {
   next();
 });
 
-app.get('/', (_req, res) => res.render('index'));
+app.get('/', (req, res) => {
+  const buildingId = req.query.building ? Number(req.query.building) : null;
+  if (!buildingId) return res.render('index', { dashboard: null });
+
+  const building = db.prepare(
+    'SELECT b.*, e.name AS entity_name FROM buildings b JOIN entities e ON e.id = b.entity_id WHERE b.id = ?'
+  ).get(buildingId) as any;
+  if (!building) return res.render('index', { dashboard: null });
+
+  const today = new Date().toISOString().split('T')[0];
+  const year = 2026; const period = 6;
+
+  // Occupancy
+  const suites = db.prepare('SELECT status, COUNT(*) AS cnt, SUM(rentable_area_sqft) AS area FROM suites WHERE building_id = ? GROUP BY status').all(buildingId) as any[];
+  const totalSuites = suites.reduce((s: number, r: any) => s + r.cnt, 0);
+  const occupiedSuites = suites.filter((r: any) => r.status === 'occupied').reduce((s: number, r: any) => s + r.cnt, 0);
+  const occupiedArea = suites.filter((r: any) => r.status === 'occupied').reduce((s: number, r: any) => s + (r.area || 0), 0);
+  const occupancyPct = totalSuites > 0 ? (occupiedSuites / totalSuites * 100) : 0;
+
+  // Budget variance
+  const bva = db.prepare(
+    'SELECT COALESCE(SUM(budget_cents),0) AS b, COALESCE(SUM(actual_cents),0) AS a FROM v_budget_vs_actual WHERE building_id = ? AND fiscal_year = ? AND period = ?'
+  ).get(buildingId, year, period) as any;
+  const variance = bva.a - bva.b;
+
+  // AR arrears
+  const arrearsRows = db.prepare(`
+    SELECT rc.lease_id, rc.amount_cents, COALESCE((SELECT SUM(pa.amount_cents) FROM payment_applications pa WHERE pa.rent_charge_id = rc.id),0) AS paid
+    FROM rent_charges rc WHERE rc.building_id = ? AND rc.status IN ('open','partial')
+  `).all(buildingId) as any[];
+  const totalArrears = arrearsRows.reduce((s: number, r: any) => s + (r.amount_cents - r.paid), 0);
+  const tenantsInArrears = new Set(arrearsRows.map((r: any) => r.lease_id)).size;
+
+  // Open maintenance
+  const maint = db.prepare(`
+    SELECT priority, COUNT(*) AS cnt FROM maintenance_requests
+    WHERE building_id = ? AND status NOT IN ('completed','closed') GROUP BY priority
+  `).all(buildingId) as any[];
+  const openMaint = maint.reduce((s: number, r: any) => s + r.cnt, 0);
+  const urgentMaint = maint.filter((r: any) => r.priority === 'emergency' || r.priority === 'urgent').reduce((s: number, r: any) => s + r.cnt, 0);
+
+  // Expiring insurance (tenant COIs within 60 days)
+  const sixtyDays = new Date(Date.now() + 60 * 86400000).toISOString().split('T')[0];
+  const expiringCois = db.prepare(`
+    SELECT td.tenant_id, td.expiry_date, t.name AS tenant_name
+    FROM tenant_documents td
+    JOIN tenants t ON t.id = td.tenant_id
+    JOIN leases l ON l.tenant_id = td.tenant_id
+    JOIN suites s ON s.id = l.suite_id
+    WHERE s.building_id = ? AND td.doc_type = 'insurance_coi'
+      AND td.expiry_date <= ? AND td.status IN ('approved','expired')
+    GROUP BY td.tenant_id
+  `).all(buildingId, sixtyDays) as any[];
+
+  // Needs-attention items
+  const attention: any[] = [];
+
+  // Over-budget accounts
+  const overBudget = db.prepare(`
+    SELECT account_code, account_name, budget_cents, actual_cents
+    FROM v_budget_vs_actual WHERE building_id = ? AND fiscal_year = ? AND period = ?
+      AND actual_cents > budget_cents ORDER BY (actual_cents - budget_cents) DESC LIMIT 5
+  `).all(buildingId, year, period) as any[];
+  for (const ob of overBudget) {
+    attention.push({ type: 'budget', label: ob.account_name + ' over budget',
+      detail: '+$' + ((ob.actual_cents - ob.budget_cents) / 100).toLocaleString('en-US', { maximumFractionDigits: 0 }),
+      link: '/budget-vs-actual?building=' + buildingId });
+  }
+
+  // Arrears
+  const arrearsTenants = db.prepare(`
+    SELECT t.name, SUM(rc.amount_cents - COALESCE((SELECT SUM(pa.amount_cents) FROM payment_applications pa WHERE pa.rent_charge_id = rc.id),0)) AS owed
+    FROM rent_charges rc JOIN leases l ON l.id = rc.lease_id JOIN tenants t ON t.id = l.tenant_id
+    WHERE rc.building_id = ? AND rc.status IN ('open','partial')
+    GROUP BY t.id ORDER BY owed DESC LIMIT 5
+  `).all(buildingId) as any[];
+  for (const at of arrearsTenants) {
+    attention.push({ type: 'arrears', label: at.name + ' — rent outstanding',
+      detail: '$' + (at.owed / 100).toLocaleString('en-US', { maximumFractionDigits: 0 }),
+      link: '/receivables?building=' + buildingId + '&tab=arrears' });
+  }
+
+  // Expiring COIs
+  for (const ec of expiringCois) {
+    attention.push({ type: 'insurance', label: ec.tenant_name + ' — COI expires ' + ec.expiry_date.slice(5),
+      detail: '', link: '/tenant/' + ec.tenant_id });
+  }
+
+  // Emergency/urgent maintenance
+  const urgentReqs = db.prepare(`
+    SELECT mr.description, t.name AS tenant_name FROM maintenance_requests mr
+    JOIN tenants t ON t.id = mr.tenant_id
+    WHERE mr.building_id = ? AND mr.priority IN ('emergency','urgent') AND mr.status NOT IN ('completed','closed')
+    LIMIT 5
+  `).all(buildingId) as any[];
+  for (const ur of urgentReqs) {
+    attention.push({ type: 'maintenance', label: ur.tenant_name + ' — ' + ur.description.slice(0, 50),
+      detail: '', link: '/maintenance?building=' + buildingId });
+  }
+
+  res.render('index', {
+    dashboard: { building, buildingId, occupancyPct, occupiedSuites, totalSuites, occupiedArea,
+      budget: bva.b, actual: bva.a, variance, totalArrears, tenantsInArrears,
+      openMaint, urgentMaint, expiringCois: expiringCois.length, attention }
+  });
+});
 app.get('/api/health', (_req, res) => res.json({ ok: true, ts: new Date().toISOString() }));
 
 app.get('/budget-vs-actual', (req, res) => {
