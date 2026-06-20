@@ -20,6 +20,19 @@ reports.get('/budget-vs-actual', (req, res) => {
   );
 });
 
+reports.get('/gl-accounts/search', (req, res) => {
+  const q = String(req.query.q ?? '').trim();
+  if (!q) return res.json([]);
+  const rows = db.prepare(`
+    SELECT id, code, name, parent_id, is_postable, account_type
+    FROM gl_accounts
+    WHERE is_postable = 1 AND active = 1
+      AND (code LIKE ? OR LOWER(name) LIKE LOWER(?))
+    ORDER BY sort_order LIMIT 25
+  `).all(q + '%', '%' + q + '%');
+  res.json(rows);
+});
+
 reports.get('/budget-vs-actual/grouped', (req, res) => {
   const building = Number(req.query.building ?? 1);
   const year = Number(req.query.year ?? 2026);

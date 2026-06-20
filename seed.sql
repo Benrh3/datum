@@ -33,6 +33,156 @@ INSERT INTO gl_accounts (id,code,name,account_type,is_recoverable,is_postable,pa
   (23,'6300','Property management fee','operating_expense',0,1,20,23),
   (24,'6400','Security','operating_expense',1,1,20,24);
 
+-- Expanded chart of accounts: ~150 codes across income, opex, capital, non-operating.
+-- Three hierarchy levels: category (header) → account (header) → sub-account (postable).
+-- Existing accounts (IDs 10–24) are untouched; new ones start at ID 100.
+
+-- ── 4000 INCOME ──────────────────────────────────────────────────
+INSERT INTO gl_accounts (id,code,name,account_type,is_recoverable,is_postable,sort_order) VALUES
+  (100,'4000','Revenue','income',0,0,4000);
+INSERT INTO gl_accounts (id,code,name,account_type,is_recoverable,is_postable,parent_id,sort_order) VALUES
+  (110,'4100','Rental income','income',0,0,100,4100),
+  (111,'4110','Base rent — office','income',0,1,110,4110),
+  (112,'4120','Base rent — retail','income',0,1,110,4120),
+  (113,'4130','Percentage rent','income',0,1,110,4130),
+  (114,'4140','Parking revenue','income',0,1,110,4140),
+  (115,'4150','Storage income','income',0,1,110,4150),
+  (116,'4160','Antenna & telecom leases','income',0,1,110,4160),
+  (120,'4200','Recovery income','income',0,0,100,4200),
+  (121,'4210','CAM recoveries','income',0,1,120,4210),
+  (122,'4220','Tax recoveries','income',0,1,120,4220),
+  (123,'4230','Insurance recoveries','income',0,1,120,4230),
+  (124,'4240','Utility recoveries','income',0,1,120,4240),
+  (130,'4300','Other income','income',0,0,100,4300),
+  (131,'4310','Late fees & penalties','income',0,1,130,4310),
+  (132,'4320','Interest income','income',0,1,130,4320),
+  (133,'4330','Tenant event fees','income',0,1,130,4330),
+  (134,'4340','Forfeited deposits','income',0,1,130,4340);
+
+-- ── 5000 sub-accounts (third level under existing 5100–5400) ────
+INSERT INTO gl_accounts (id,code,name,account_type,is_recoverable,is_postable,parent_id,sort_order) VALUES
+  (140,'5110','General repairs','operating_expense',1,1,11,5110),
+  (141,'5120','Painting & finishing','operating_expense',1,1,11,5120),
+  (142,'5130','Doors & hardware','operating_expense',1,1,11,5130),
+  (143,'5140','Flooring','operating_expense',1,1,11,5140),
+  (144,'5150','Roof repairs (minor)','operating_expense',1,1,11,5150),
+  (145,'5160','Plumbing repairs','operating_expense',1,1,11,5160),
+  (146,'5170','Electrical repairs','operating_expense',1,1,11,5170),
+  (150,'5210','Electricity','operating_expense',1,1,12,5210),
+  (151,'5220','Natural gas','operating_expense',1,1,12,5220),
+  (152,'5230','Water & sewer','operating_expense',1,1,12,5230),
+  (153,'5240','Waste disposal','operating_expense',1,1,12,5240),
+  (160,'5310','Day porter service','operating_expense',1,1,13,5310),
+  (161,'5320','Night cleaning','operating_expense',1,1,13,5320),
+  (162,'5330','Cleaning supplies','operating_expense',1,1,13,5330),
+  (163,'5340','Window cleaning','operating_expense',1,1,13,5340),
+  (170,'5410','Grounds maintenance','operating_expense',1,1,14,5410),
+  (171,'5420','Snow removal','operating_expense',1,1,14,5420),
+  (172,'5430','Irrigation','operating_expense',1,1,14,5430);
+
+-- ── 5000 new second-level accounts ──────────────────────────────
+INSERT INTO gl_accounts (id,code,name,account_type,is_recoverable,is_postable,parent_id,sort_order) VALUES
+  (180,'5500','Life safety','operating_expense',1,0,10,5500),
+  (181,'5510','Fire alarm maintenance','operating_expense',1,1,180,5510),
+  (182,'5520','Sprinkler inspection','operating_expense',1,1,180,5520),
+  (183,'5530','Emergency generator','operating_expense',1,1,180,5530),
+  (184,'5540','Emergency lighting','operating_expense',1,1,180,5540),
+  (190,'5600','Building systems','operating_expense',1,0,10,5600),
+  (191,'5610','Elevator maintenance','operating_expense',1,1,190,5610),
+  (192,'5620','HVAC preventive maintenance','operating_expense',1,1,190,5620),
+  (193,'5630','Building automation','operating_expense',1,1,190,5630),
+  (194,'5640','Plumbing systems','operating_expense',1,1,190,5640),
+  (195,'5650','Electrical systems','operating_expense',1,1,190,5650),
+  (200,'5700','Tenant services','operating_expense',1,0,10,5700),
+  (201,'5710','Signage','operating_expense',1,1,200,5710),
+  (202,'5720','After-hours HVAC','operating_expense',1,1,200,5720),
+  (203,'5730','Pest control','operating_expense',1,1,200,5730),
+  (204,'5740','Parking operations','operating_expense',1,1,200,5740);
+
+-- ── 6000 sub-accounts + new second-level ────────────────────────
+INSERT INTO gl_accounts (id,code,name,account_type,is_recoverable,is_postable,parent_id,sort_order) VALUES
+  (210,'6210','Property insurance','operating_expense',0,1,22,6210),
+  (211,'6220','General liability','operating_expense',0,1,22,6220),
+  (212,'6230','Umbrella policy','operating_expense',0,1,22,6230),
+  (213,'6240','Environmental insurance','operating_expense',0,1,22,6240),
+  (220,'6410','Guard service','operating_expense',1,1,24,6410),
+  (221,'6420','Access control systems','operating_expense',1,1,24,6420),
+  (222,'6430','CCTV & monitoring','operating_expense',1,1,24,6430),
+  (230,'6500','Administrative','operating_expense',0,0,20,6500),
+  (231,'6510','Office supplies','operating_expense',0,1,230,6510),
+  (232,'6520','Telecommunications','operating_expense',0,1,230,6520),
+  (233,'6530','Legal fees','operating_expense',0,1,230,6530),
+  (234,'6540','Accounting & audit','operating_expense',0,1,230,6540),
+  (235,'6550','Licenses & permits','operating_expense',0,1,230,6550),
+  (236,'6560','Bank charges','operating_expense',0,1,230,6560),
+  (237,'6570','Postage & courier','operating_expense',0,1,230,6570),
+  (240,'6600','Marketing & leasing','operating_expense',0,0,20,6600),
+  (241,'6610','Leasing commissions','operating_expense',0,1,240,6610),
+  (242,'6620','Marketing & advertising','operating_expense',0,1,240,6620),
+  (243,'6630','Tenant retention','operating_expense',0,1,240,6630),
+  (244,'6640','Broker incentives','operating_expense',0,1,240,6640),
+  (250,'6700','Professional services','operating_expense',0,0,20,6700),
+  (251,'6710','Property appraisal','operating_expense',0,1,250,6710),
+  (252,'6720','Environmental assessment','operating_expense',0,1,250,6720),
+  (253,'6730','Engineering consulting','operating_expense',0,1,250,6730),
+  (254,'6740','Survey & inspection','operating_expense',0,1,250,6740);
+
+-- ── 7000 CAPITAL ────────────────────────────────────────────────
+INSERT INTO gl_accounts (id,code,name,account_type,is_recoverable,is_postable,sort_order) VALUES
+  (300,'7000','Capital expenditures','capital',0,0,7000);
+INSERT INTO gl_accounts (id,code,name,account_type,is_recoverable,is_postable,parent_id,sort_order) VALUES
+  (310,'7100','Tenant improvements','capital',0,0,300,7100),
+  (311,'7110','TI allowance — new leases','capital',0,1,310,7110),
+  (312,'7120','TI allowance — renewals','capital',0,1,310,7120),
+  (313,'7130','Building standard finish','capital',0,1,310,7130),
+  (320,'7200','Building improvements','capital',0,0,300,7200),
+  (321,'7210','Roof replacement','capital',0,1,320,7210),
+  (322,'7220','Parking & paving','capital',0,1,320,7220),
+  (323,'7230','Lobby & common area','capital',0,1,320,7230),
+  (324,'7240','Facade & envelope','capital',0,1,320,7240),
+  (325,'7250','Washroom renovation','capital',0,1,320,7250),
+  (326,'7260','Window replacement','capital',0,1,320,7260),
+  (330,'7300','Equipment & systems','capital',0,0,300,7300),
+  (331,'7310','HVAC replacement','capital',0,1,330,7310),
+  (332,'7320','Elevator modernization','capital',0,1,330,7320),
+  (333,'7330','Life safety upgrade','capital',0,1,330,7330),
+  (334,'7340','Electrical upgrade','capital',0,1,330,7340),
+  (335,'7350','BAS/controls upgrade','capital',0,1,330,7350),
+  (340,'7400','Environmental','capital',0,0,300,7400),
+  (341,'7410','Asbestos abatement','capital',0,1,340,7410),
+  (342,'7420','Environmental remediation','capital',0,1,340,7420),
+  (343,'7430','Energy retrofit','capital',0,1,340,7430),
+  (350,'7500','Technology','capital',0,0,300,7500),
+  (351,'7510','Network infrastructure','capital',0,1,350,7510),
+  (352,'7520','Building wifi','capital',0,1,350,7520),
+  (353,'7530','Tenant portal','capital',0,1,350,7530),
+  (354,'7540','Smart building sensors','capital',0,1,350,7540);
+
+-- ── 8000 NON-OPERATING ──────────────────────────────────────────
+INSERT INTO gl_accounts (id,code,name,account_type,is_recoverable,is_postable,sort_order) VALUES
+  (400,'8000','Non-operating','operating_expense',0,0,8000);
+INSERT INTO gl_accounts (id,code,name,account_type,is_recoverable,is_postable,parent_id,sort_order) VALUES
+  (410,'8100','Debt service','operating_expense',0,0,400,8100),
+  (411,'8110','Mortgage interest','operating_expense',0,1,410,8110),
+  (412,'8120','Mortgage principal','operating_expense',0,1,410,8120),
+  (413,'8130','Line of credit interest','operating_expense',0,1,410,8130),
+  (420,'8200','Reserves','capital',0,0,400,8200),
+  (421,'8210','Replacement reserve','capital',0,1,420,8210),
+  (422,'8220','Structural reserve','capital',0,1,420,8220),
+  (423,'8230','Environmental reserve','capital',0,1,420,8230),
+  (430,'8300','Distributions','operating_expense',0,0,400,8300),
+  (431,'8310','Owner distributions','operating_expense',0,1,430,8310),
+  (432,'8320','Partner draws','operating_expense',0,1,430,8320);
+
+-- ── 9000 TAX ────────────────────────────────────────────────────
+INSERT INTO gl_accounts (id,code,name,account_type,is_recoverable,is_postable,sort_order) VALUES
+  (500,'9000','Tax accounts','tax',0,0,9000);
+INSERT INTO gl_accounts (id,code,name,account_type,is_recoverable,is_postable,parent_id,sort_order) VALUES
+  (501,'9100','Income tax provision','tax',0,1,500,9100),
+  (502,'9200','Property transfer tax','tax',0,1,500,9200),
+  (503,'9300','GST/HST payable','tax',0,1,500,9300),
+  (504,'9400','Provincial sales tax','tax',0,1,500,9400);
+
 INSERT INTO vendors (id,name,default_gl_account_id,match_aliases,requires_work_confirmation) VALUES
   (1,'Pinnacle Roofing Ltd',11,'["Pinnacle Roofing","Pinnacle Roofing Ltd."]',1),
   (2,'BC Hydro',12,'["BC Hydro","British Columbia Hydro & Power Authority"]',0),
