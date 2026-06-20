@@ -295,7 +295,7 @@ const avgRate = leasedArea > 0 ? totalRent / leasedArea : 0;
 <% for (const r of rows) { %>
             <tr data-suite="<%= r.suite_number %>" data-tenant="<%= r.tenant_name %>">
               <td class="l"><span class="suite"><%= r.suite_number %></span></td>
-              <td class="l"><span class="tenant"><%= r.tenant_name %></span></td>
+              <td class="l"><a href="/tenant/<%= r.tenant_id %>" style="color:var(--text);text-decoration:none;font-weight:500"><%= r.tenant_name %></a></td>
               <td class="num"><%= fmtArea(r.rentable_area_sqft) %></td>
               <td class="tech"><span class="lease-badge"><%= fmtLease(r.lease_type) %></span></td>
               <td class="num tech"><%= fmtDate(r.commencement_date) %></td>

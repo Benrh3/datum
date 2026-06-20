@@ -451,3 +451,51 @@ INSERT INTO payment_applications (receipt_id,rent_charge_id,amount_cents) VALUES
 INSERT INTO match_proposals (bank_transaction_id,rent_charge_id,lease_id,proposed_amount_cents,confidence,match_reason,status) VALUES
   (10,13,5,1500000,65,'Partial match: $15,000 of $28,359 due from Tidewater — amount mismatch','proposed'),
   (11,14,6,4811583,40,'Amount matches Apex July rent but reference missing','proposed');
+
+-- ══════════════════════════════════════════════════════════════════
+-- Tenant profiles: documents, contacts, notices, maintenance, work orders
+-- ══════════════════════════════════════════════════════════════════
+
+-- Tenant insurance COIs (landlord named as additional insured)
+INSERT INTO tenant_documents (tenant_id,doc_type,description,expiry_date,status) VALUES
+  (1,'insurance_coi','CGL $2M — landlord as additional insured','2027-01-31','approved'),
+  (1,'business_license','BC law society registration','2026-12-31','approved'),
+  (2,'insurance_coi','CGL $5M — landlord as additional insured','2026-11-30','approved'),
+  (3,'insurance_coi','CGL $2M — landlord as additional insured','2026-09-15','approved'),
+  (4,'insurance_coi','CGL $5M — E&O + landlord additional insured','2027-03-31','approved'),
+  (5,'insurance_coi','CGL $2M — landlord as additional insured','2026-08-10','approved'),
+  (6,'insurance_coi','CGL $3M — landlord as additional insured','2026-05-15','expired');
+
+-- Additional tenant contacts
+INSERT INTO tenant_contacts (tenant_id,name,role,email,phone,is_primary) VALUES
+  (1,'Sarah Blackwood','Managing Partner','s.blackwood@blackwoodlaw.ca','604-555-0101',1),
+  (1,'Robert Kwan','Office Manager','r.kwan@blackwoodlaw.ca','604-555-0102',0),
+  (2,'James Chen','CEO','j.chen@cascadedigital.ca','604-555-0201',1),
+  (2,'Priya Nair','Facilities Lead','p.nair@cascadedigital.ca','604-555-0202',0),
+  (3,'Anita Sharma','Director','a.sharma@pacificrimcg.ca','604-555-0301',1),
+  (4,'David Park','Branch Manager','d.park@northshorewealth.ca','604-555-0401',1),
+  (5,'Emma Liu','Studio Principal','e.liu@tidewaterarch.ca','604-555-0501',1),
+  (5,'Jack Torres','Operations','j.torres@tidewaterarch.ca','604-555-0502',0),
+  (6,'Marcus Webb','Managing Director','m.webb@apexventures.ca','604-555-0601',1);
+
+-- Notices
+INSERT INTO notices (building_id,tenant_id,scope,subject,body,sent_at,sent_by) VALUES
+  (1,NULL,'building','Fire alarm testing — June 20','Annual fire alarm testing will take place June 20 between 9 AM and 12 PM. Expect intermittent alarms. No evacuation required.','2026-06-15',1),
+  (1,NULL,'building','Elevator modernization schedule','Elevator 2 will be out of service July 7–18 for modernization. Elevator 1 remains operational.','2026-06-28',1),
+  (1,1,'tenant','Suite 200 HVAC filter replacement','Maintenance will access Suite 200 on June 22 between 8–10 AM to replace HVAC filters. No disruption expected.','2026-06-20',1),
+  (1,5,'tenant','Insurance renewal reminder','Your tenant insurance (CGL $2M) expires Aug 10, 2026. Please submit a renewed certificate naming the landlord as additional insured at least 30 days before expiry.','2026-07-01',2);
+
+-- Maintenance requests
+INSERT INTO maintenance_requests (id,tenant_id,building_id,suite_id,category,description,priority,status,submitted_at,resolved_at) VALUES
+  (1,2,1,2,'hvac','Conference room on the east side is not cooling properly. Thermostat reads 26°C, set to 21°C.','urgent','completed','2026-06-10','2026-06-12'),
+  (2,1,1,1,'plumbing','Slow drain in the kitchenette sink, Suite 200.','normal','completed','2026-06-14','2026-06-16'),
+  (3,5,1,7,'electrical','Flickering lights in the open studio area, north bank of fixtures.','normal','assigned','2026-07-01',NULL),
+  (4,6,1,8,'elevator','Elevator 1 making grinding noise on approach to floor 8. Intermittent.','urgent','submitted','2026-07-04',NULL),
+  (5,3,1,4,'pest','Mouse sighting in the copy room. Second report this month.','urgent','in_progress','2026-07-02',NULL);
+
+-- Work orders (linked to maintenance requests and vendors)
+INSERT INTO work_orders (id,maintenance_request_id,building_id,assigned_vendor_id,assigned_by,description,priority,status,created_at,completed_at) VALUES
+  (1,1,1,NULL,1,'HVAC not cooling Suite 300 conference room — check east-side unit','urgent','completed','2026-06-10','2026-06-12'),
+  (2,2,1,NULL,1,'Slow drain Suite 200 kitchenette — clear blockage','normal','completed','2026-06-14','2026-06-16'),
+  (3,3,1,NULL,1,'Flickering lights Suite 700 open studio — inspect north bank fixtures','normal','open','2026-07-01',NULL),
+  (4,5,1,NULL,1,'Pest control Suite 500 copy room — second mouse sighting','urgent','dispatched','2026-07-02',NULL);

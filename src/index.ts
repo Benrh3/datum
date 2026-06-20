@@ -75,7 +75,7 @@ app.get('/rent-roll', (req, res) => {
   if (!building) return res.status(404).send('Building not found');
 
   const rows = db.prepare(
-    'SELECT * FROM v_rent_roll WHERE building_id = ? ORDER BY suite_number'
+    'SELECT v.*, l.tenant_id FROM v_rent_roll v JOIN leases l ON l.id = v.lease_id WHERE v.building_id = ? ORDER BY v.suite_number'
   ).all(buildingId) as any[];
 
   res.render('rent-roll', { building, buildingId, rows });
@@ -352,6 +352,119 @@ app.get('/ap-review', (req, res) => {
   const glAccounts = db.prepare("SELECT id, code, name FROM gl_accounts WHERE is_postable = 1 ORDER BY sort_order").all() as any[];
 
   res.render('ap-review', { building, buildingId, queue, selectedId, invoice, lines, gates, approvals, importInfo, rules, unusualLines, reclassHistory, glAccounts });
+});
+
+app.get('/tenant/:id', (req, res) => {
+  const tenantId = Number(req.params.id);
+  const tenant = db.prepare('SELECT * FROM tenants WHERE id = ?').get(tenantId) as any;
+  if (!tenant) return res.status(404).send('Tenant not found');
+
+  const leases = db.prepare(`
+    SELECT l.*, s.suite_number, s.rentable_area_sqft, b.name AS building_name, b.id AS building_id,
+      COALESCE((SELECT rs.annual_rent_cents FROM rent_steps rs WHERE rs.lease_id = l.id
+        AND rs.effective_date <= date('now') ORDER BY rs.effective_date DESC LIMIT 1
+      ), l.base_rent_annual_cents) AS current_annual_rent_cents
+    FROM leases l JOIN suites s ON s.id = l.suite_id JOIN buildings b ON b.id = s.building_id
+    WHERE l.tenant_id = ? ORDER BY l.commencement_date DESC
+  `).all(tenantId) as any[];
+
+  const documents = db.prepare('SELECT * FROM tenant_documents WHERE tenant_id = ? ORDER BY uploaded_at DESC').all(tenantId) as any[];
+  const contacts = db.prepare('SELECT * FROM tenant_contacts WHERE tenant_id = ? ORDER BY is_primary DESC, name').all(tenantId) as any[];
+  const notices = db.prepare(`
+    SELECT n.*, u.name AS sent_by_name FROM notices n LEFT JOIN users u ON u.id = n.sent_by
+    WHERE n.tenant_id = ? OR (n.scope = 'building' AND n.building_id IN (SELECT s.building_id FROM suites s JOIN leases l ON l.suite_id = s.id WHERE l.tenant_id = ?))
+    ORDER BY n.sent_at DESC LIMIT 20
+  `).all(tenantId, tenantId) as any[];
+
+  const requests = db.prepare(`
+    SELECT mr.*, s.suite_number FROM maintenance_requests mr LEFT JOIN suites s ON s.id = mr.suite_id
+    WHERE mr.tenant_id = ? ORDER BY mr.submitted_at DESC
+  `).all(tenantId) as any[];
+
+  const arrears = db.prepare(`
+    SELECT rc.*, COALESCE((SELECT SUM(pa.amount_cents) FROM payment_applications pa WHERE pa.rent_charge_id = rc.id),0) AS paid_cents
+    FROM rent_charges rc WHERE rc.lease_id IN (SELECT id FROM leases WHERE tenant_id = ?) AND rc.status IN ('open','partial')
+    ORDER BY rc.due_date
+  `).all(tenantId) as any[];
+
+  const buildingId = leases[0]?.building_id ?? 1;
+  res.render('tenant-profile', { tenant, leases, documents, contacts, notices, requests, arrears, buildingId });
+});
+
+app.get('/maintenance', (req, res) => {
+  const buildingId = Number(req.query.building ?? 1);
+  const building = db.prepare('SELECT b.name FROM buildings b WHERE b.id = ?').get(buildingId) as any;
+  if (!building) return res.status(404).send('Building not found');
+
+  const requests = db.prepare(`
+    SELECT mr.*, t.name AS tenant_name, s.suite_number,
+      (SELECT COUNT(*) FROM work_orders wo WHERE wo.maintenance_request_id = mr.id) AS work_order_count
+    FROM maintenance_requests mr
+    JOIN tenants t ON t.id = mr.tenant_id
+    LEFT JOIN suites s ON s.id = mr.suite_id
+    WHERE mr.building_id = ?
+    ORDER BY CASE mr.priority WHEN 'emergency' THEN 0 WHEN 'urgent' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END, mr.submitted_at DESC
+  `).all(buildingId) as any[];
+
+  const workOrders = db.prepare(`
+    SELECT wo.*, v.name AS vendor_name, u.name AS assigned_by_name,
+      mr.description AS request_desc, t.name AS tenant_name, s.suite_number
+    FROM work_orders wo
+    LEFT JOIN maintenance_requests mr ON mr.id = wo.maintenance_request_id
+    LEFT JOIN tenants t ON t.id = mr.tenant_id
+    LEFT JOIN suites s ON s.id = mr.suite_id
+    LEFT JOIN vendors v ON v.id = wo.assigned_vendor_id
+    LEFT JOIN users u ON u.id = wo.assigned_by
+    WHERE wo.building_id = ?
+    ORDER BY wo.created_at DESC
+  `).all(buildingId) as any[];
+
+  res.render('maintenance', { building, buildingId, requests, workOrders });
+});
+
+// Maintenance API
+app.post('/api/maintenance/submit', (req, res) => {
+  try {
+    const { tenant_id, building_id, suite_id, category, description, priority } = req.body;
+    if (!tenant_id || !building_id || !description) return res.status(400).json({ error: 'tenant_id, building_id, description required' });
+    const r = db.prepare(
+      'INSERT INTO maintenance_requests (tenant_id, building_id, suite_id, category, description, priority) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(tenant_id, building_id, suite_id ?? null, category ?? 'general', description, priority ?? 'normal');
+    db.prepare("INSERT INTO audit_log (table_name, record_id, action, new_values) VALUES ('maintenance_requests', ?, 'submitted', ?)")
+      .run(r.lastInsertRowid, JSON.stringify({ tenant_id, description }));
+    res.json({ ok: true, request_id: Number(r.lastInsertRowid) });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/maintenance/assign', (req, res) => {
+  try {
+    const { request_id, vendor_id, assigned_by, description } = req.body;
+    if (!request_id) return res.status(400).json({ error: 'request_id required' });
+    const mr = db.prepare('SELECT * FROM maintenance_requests WHERE id = ?').get(request_id) as any;
+    if (!mr) return res.status(404).json({ error: 'Request not found' });
+
+    db.prepare("UPDATE maintenance_requests SET status = 'assigned' WHERE id = ?").run(request_id);
+    const wo = db.prepare(
+      'INSERT INTO work_orders (maintenance_request_id, building_id, assigned_vendor_id, assigned_by, description, priority) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(request_id, mr.building_id, vendor_id ?? null, assigned_by ?? null, description || mr.description, mr.priority);
+    db.prepare("INSERT INTO audit_log (table_name, record_id, action, new_values, user_id) VALUES ('work_orders', ?, 'created', ?, ?)")
+      .run(wo.lastInsertRowid, JSON.stringify({ request_id, vendor_id }), assigned_by ?? null);
+    res.json({ ok: true, work_order_id: Number(wo.lastInsertRowid) });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/maintenance/complete', (req, res) => {
+  try {
+    const { work_order_id } = req.body;
+    if (!work_order_id) return res.status(400).json({ error: 'work_order_id required' });
+    db.prepare("UPDATE work_orders SET status = 'completed', completed_at = datetime('now') WHERE id = ?").run(work_order_id);
+    const wo = db.prepare('SELECT maintenance_request_id FROM work_orders WHERE id = ?').get(work_order_id) as any;
+    if (wo?.maintenance_request_id) {
+      db.prepare("UPDATE maintenance_requests SET status = 'completed', resolved_at = datetime('now') WHERE id = ?").run(wo.maintenance_request_id);
+    }
+    db.prepare("INSERT INTO audit_log (table_name, record_id, action) VALUES ('work_orders', ?, 'completed')").run(work_order_id);
+    res.json({ ok: true });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
 app.get('/receivables', (req, res) => {
